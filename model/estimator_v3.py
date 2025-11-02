@@ -51,7 +51,8 @@ class Estimator_v3(nn.Module): # Estimator_v3 클래스 정의
                  raise FileNotFoundError(f"Pretrained model file not found at {pretrained_model_path}")
 
             # Load the pretrained model state dict
-            full_state_dict = torch.load(pretrained_model_path)
+            # PyTorch 2.6+: Use weights_only=False for models saved with full objects
+            full_state_dict = torch.load(pretrained_model_path, weights_only=False)
 
             # Extract the state dict for the Transformer part (ch_tf)
             # v4 모델 객체인 경우 state_dict()를 호출하여 실제 상태 사전을 가져옵니다.

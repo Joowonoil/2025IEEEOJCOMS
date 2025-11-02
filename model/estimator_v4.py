@@ -32,7 +32,8 @@ class Estimator_v4(nn.Module): # Estimator_v4 클래스 정의 (채널 추정 �
                  raise FileNotFoundError(f"Pretrained model file not found at {pretrained_model_path}") # 파일이 없으면 예외 발생
 
             # Load the pretrained model state dict # 사전 학습된 모델의 상태 사전 로드
-            full_state_dict = torch.load(pretrained_model_path) # 모델 상태 사전 로드
+            # PyTorch 2.6+: Use weights_only=False for models saved with full objects
+            full_state_dict = torch.load(pretrained_model_path, weights_only=False) # 모델 상태 사전 로드
 
             # Extract the state dict for the Transformer part (ch_tf) # 트랜스포머 부분의 상태 사전 추출
             transformer_state_dict_to_load = {} # 로드할 트랜스포머 상태 사전 딕셔너리 초기화

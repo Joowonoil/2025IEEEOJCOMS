@@ -1,0 +1,17 @@
+# Vast.ai용 간소화된 requirements
+# PyTorch는 Docker 이미지에 포함되어 있음
+
+# 핵심 라이브러리
+transformers>=4.36.0
+peft>=0.7.0
+wandb>=0.16.0
+einops>=0.7.0
+pyyaml>=6.0
+
+# 데이터 처리
+scipy>=1.11.0
+h5py>=3.10.0
+
+# 선택사항 (성능 향상)
+# nvidia-ml-py3
+# triton
