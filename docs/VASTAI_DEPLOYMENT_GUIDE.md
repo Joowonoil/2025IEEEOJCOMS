@@ -117,8 +117,14 @@ cd DNN_channel_estimation_training
 
 **Step 3: 의존성 설치**
 ```bash
-pip install -r requirements.txt
+# Vast.ai용 간소화된 requirements 사용 (중요!)
+pip install -r requirements_vastai.txt
+
+# 또는 수동 설치
+pip install transformers peft wandb einops pyyaml scipy h5py gdown torch-tensorrt
 ```
+
+**주의**: `requirements.txt`는 Windows 환경용이므로 Vast.ai(Linux)에서는 `requirements_vastai.txt` 사용!
 
 **Step 4: CUDA 확인**
 ```bash
@@ -127,20 +133,50 @@ python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}'); print(f'De
 
 **Step 5: 데이터셋 다운로드**
 
-*Google Drive 사용 시:*
-```bash
-pip install gdown
+**방법 1: 로컬에서 압축 후 Jupyter Lab 업로드 (강력 추천!)**
 
-# Base model v3 다운로드
-gdown YOUR_V3_MODEL_FILE_ID -O saved_model/Large_estimator_v3_base_extended_final.pt
+Google Drive gdown이 권한 문제로 실패할 수 있으므로, 직접 업로드가 가장 확실합니다.
 
-# Base model v4 다운로드
-gdown YOUR_V4_MODEL_FILE_ID -O saved_model/Large_estimator_v4_base_extended_final.pt
+*로컬 컴퓨터 (Windows PowerShell):*
+```powershell
+cd C:\Users\YOUR_PATH\DNN_channel_estimation_training
 
-# Dataset 다운로드 (압축된 경우)
-gdown YOUR_DATASET_FILE_ID -O dataset.tar.gz
-tar -xzf dataset.tar.gz
+# 압축
+Compress-Archive -Path dataset -DestinationPath dataset.zip -Force
+Compress-Archive -Path saved_model -DestinationPath saved_model.zip -Force
 ```
+
+*Vast.ai Jupyter Lab에서:*
+1. Jupyter Terminal → Launch Application
+2. 좌측 파일 브라우저
+3. Upload 버튼 (↑) 클릭
+4. `dataset.zip`, `saved_model.zip` 선택
+5. 업로드 대기 (10-30분)
+
+*Vast.ai 터미널에서 압축 해제:*
+```bash
+cd /workspace/DNN_channel_estimation_training
+unzip dataset.zip
+unzip saved_model.zip
+
+# 확인
+ls dataset/PDP_processed/*.mat | head -5
+ls saved_model/Large_estimator_v3_base_final.pt
+ls saved_model/Large_estimator_v4_base_final.pt
+```
+
+**방법 2: Google Drive (gdown) - 권한 문제 가능**
+
+```bash
+# Google Drive 폴더 다운로드
+gdown --folder https://drive.google.com/drive/folders/YOUR_FOLDER_ID
+
+# 실패 시 wget으로 개별 파일
+wget --no-check-certificate 'https://drive.google.com/uc?export=download&id=FILE_ID' -O file.zip
+unzip file.zip
+```
+
+**주의**: Google Drive 공유 설정을 "링크가 있는 모든 사용자"로 변경해도 gdown이 실패할 수 있습니다. **방법 1 추천!**
 
 **Step 6: WandB 로그인 (선택)**
 ```bash
@@ -149,13 +185,31 @@ wandb login YOUR_API_KEY
 
 ### 3.2 실험별 실행 명령
 
-**Instance 1: Prompt**
+**추천 방법: nohup 사용 (tmux보다 간단)**
+
+**Instance 1: Adapter**
+```bash
+cd /workspace/2025IEEEOJCOMS
+
+# 백그라운드 실행
+nohup python Transfer_Pareto_Adapter.py > adapter.log 2>&1 &
+
+# 로그 실시간 확인
+tail -f adapter.log
+
+# GPU 사용률 확인
+watch -n 1 nvidia-smi
+
+# Ctrl+C로 로그 확인 중단 (실험은 계속 실행됨)
+```
+
+**대안: tmux 사용**
 ```bash
 # tmux 세션 생성 (연결 끊겨도 계속 실행)
-tmux new -s prompt
+tmux new -s adapter
 
 # 실행
-python Transfer_Pareto_Prompt.py
+python Transfer_Pareto_Adapter.py
 
 # Ctrl+B, D로 detach (백그라운드 실행)
 ```
