@@ -73,7 +73,7 @@ dataset:
   cp_length: 590  # ns
   max_random_tap_delay_cp_proportion: 0.2
   rnd_seed: 0
-  num_workers: 0
+  num_workers: 0  # Windows에서는 0 필요, Vast.ai에서는 직접 수정
   is_phase_noise: False
   is_channel: True
   is_noise: True

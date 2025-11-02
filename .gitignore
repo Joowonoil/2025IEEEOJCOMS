@@ -60,3 +60,7 @@ Thumbs.db
 temp_*.yaml
 *.tmp
 miktex-setup.exe
+
+# Compressed files (for Vast.ai upload)
+*.zip
+*.tar.gz
