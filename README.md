@@ -11,6 +11,34 @@
 - **[🎓 훈련 가이드](./docs/TRAINING_GUIDE.md)** - 실행 및 설정 방법
 - **[⚖️ 모델 비교](./docs/MODELS_COMPARISON.md)** - v3 Adapter vs v4 LoRA
 
+## 📦 데이터셋 및 모델 다운로드
+
+**중요**: 파일 크기 제한으로 인해 데이터셋과 학습된 모델은 별도로 호스팅됩니다.
+
+### Google Drive 다운로드
+**[📥 데이터셋 & 모델 다운로드](YOUR_GOOGLE_DRIVE_LINK)**
+
+다운로드 후 프로젝트 루트에 압축 해제:
+```bash
+# 압축 해제
+unzip dataset.zip
+unzip saved_model.zip
+
+# 또는 개별 폴더로 다운로드
+# dataset/
+# saved_model/
+# cross_domain_test_data/
+# simple_test_data/
+```
+
+### 포함된 파일
+- `dataset/PDP_processed/` - 학습 데이터셋 (.mat 파일)
+- `saved_model/` - 사전학습된 모델 (.pt 파일)
+- `cross_domain_test_data/` - 크로스 도메인 테스트 데이터
+- `simple_test_data/` - 간단한 테스트 데이터
+
+---
+
 ## 🚀 빠른 시작
 
 ### 환경 설정
