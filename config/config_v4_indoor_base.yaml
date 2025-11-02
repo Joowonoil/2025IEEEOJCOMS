@@ -1,0 +1,70 @@
+# Indoor Base Model Configuration
+# Indoor environments: InH (Indoor Hotspot) + InF (Indoor Factory)
+# 실내 환경 전용 베이스 모델 - 제한된 공간, 벽면 반사, 근거리 통신
+
+dataset:
+  channel_type: ["InH_Los", "InH_Nlos", "InF_Los", "InF_Nlos"]  # Indoor environments only
+  batch_size: 32
+  noise_spectral_density: -174.0  # dBm/Hz
+  subcarrier_spacing: 120.0  # kHz
+  transmit_power: 30.0  # dBm
+  distance_range: [10.0, 100.0]  # meter - Indoor typical range (shorter distances)
+  carrier_freq: 28.0  # GHz
+  mod_order: 64
+  ref_conf_dict:
+    'dmrs': [0, 3072, 6]
+  fft_size: 4096
+  num_guard_subcarriers: 1024
+  num_symbol: 14
+  cp_length: 590  # cyclic prefix length (ns)
+  max_random_tap_delay_cp_proportion: 0.2
+  rnd_seed: 0
+  num_workers: 0
+  is_phase_noise: False
+  is_channel: True
+  is_noise: True
+
+training:
+  lr: 0.0001
+  weight_decay: 0.000001
+  max_norm: 1.0
+  num_iter: 200000  # Full training for solid base
+  logging_step: 100
+  evaluation_step: 5000
+  evaluation_batch_size: 4
+  pn_train_start_iter: 50000
+  use_scheduler: true
+  num_warmup_steps: 1000
+  device: 'cuda:0'
+  use_wandb: True
+  wandb_proj: 'DNN_channel_estimation_Indoor_Base'  # Indoor-specific project
+  ch_loss_weight: 1
+  saved_model_name: 'Large_estimator_v4_indoor_base'  # Indoor base model
+  load_model_path: ''
+  model_save_step: 10000
+  optimizer: 'Adam'
+  momentum: 0.9
+
+# Auto upload disabled for cross-domain experiments
+auto_upload:
+  enabled: false
+  repository: "https://github.com/Joowonoil/vastai_trained_model.git"
+  include_config: true
+  include_training_log: true
+
+ch_estimation:
+  cond:
+    length: 3072
+    in_channels: 2
+    step_size: 12
+    steps_per_token: 1
+  transformer:
+    length: 3072
+    channels: 2
+    num_layers: 4
+    d_model: 128
+    n_token: 256
+    n_head: 8
+    dim_feedforward: 1024
+    dropout: 0.1
+    activation: 'relu'

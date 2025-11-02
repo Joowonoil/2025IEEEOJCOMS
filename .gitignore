@@ -1,0 +1,62 @@
+# Python Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyCharm
+.idea/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Model files (large files)
+*.pt
+*.pth
+*.ckpt
+*.h5
+saved_model/
+
+# Dataset files
+*.mat
+dataset/
+cross_domain_test_data/
+simple_test_data/
+
+# Logs
+*.log
+wandb/
+
+# Papers (exclude from git)
+papers/ICTC_2025/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+temp_*.yaml
+*.tmp
+miktex-setup.exe

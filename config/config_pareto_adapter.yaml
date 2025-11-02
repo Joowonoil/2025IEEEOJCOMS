@@ -1,0 +1,129 @@
+# Adapter Pareto Frontier Configuration
+# Testing multiple bottleneck dimensions to create parameter-performance curve
+# Dimensions: 8, 16, 32, 64
+
+# Scenario definitions
+scenarios:
+  InH:
+    channel_type: ["InH_Los_10000", "InH_Nlos_10000"]
+    distance_ranges:
+      InH_Los: [5.0, 100.0]
+      InH_Nlos: [5.0, 100.0]
+    wandb_proj: 'DNN_channel_estimation_InH_Adapter_Pareto'
+
+  InF:
+    channel_type: ["InF_Los_10000", "InF_Nlos_10000"]
+    distance_ranges:
+      InF_Los: [10.0, 100.0]
+      InF_Nlos: [10.0, 100.0]
+    wandb_proj: 'DNN_channel_estimation_InF_Adapter_Pareto'
+
+  UMi:
+    channel_type: ["UMi_Los_10000", "UMi_Nlos_10000"]
+    distance_ranges:
+      UMi_Los: [10.0, 500.0]
+      UMi_Nlos: [10.0, 500.0]
+    wandb_proj: 'DNN_channel_estimation_UMi_Adapter_Pareto'
+
+  UMa:
+    channel_type: ["UMa_Los_10000", "UMa_Nlos_10000"]
+    distance_ranges:
+      UMa_Los: [10.0, 10000.0]
+      UMa_Nlos: [10.0, 10000.0]
+    wandb_proj: 'DNN_channel_estimation_UMa_Adapter_Pareto'
+
+  RMa:
+    channel_type: ["RMa_Los_10000", "RMa_Nlos_10000"]
+    distance_ranges:
+      RMa_Los: [10.0, 10000.0]
+      RMa_Nlos: [10.0, 10000.0]
+    wandb_proj: 'DNN_channel_estimation_RMa_Adapter_Pareto'
+
+# Adapter bottleneck dimension configurations for Pareto analysis
+adapter_configs:
+  dim8:
+    bottleneck_dim: 8
+    params: 65536  # Approximate trainable parameters
+
+  dim16:
+    bottleneck_dim: 16
+    params: 131072  # Approximate trainable parameters
+
+  dim32:
+    bottleneck_dim: 32
+    params: 262144  # Approximate trainable parameters
+
+  dim64:
+    bottleneck_dim: 64
+    params: 524288  # Approximate trainable parameters
+
+# Common dataset settings
+dataset:
+  batch_size: 32
+  noise_spectral_density: -174.0  # dBm/Hz
+  subcarrier_spacing: 120.0  # kHz
+  transmit_power: 30.0  # dBm
+  carrier_freq: 28.0  # GHz
+  mod_order: 64
+  ref_conf_dict:
+    'dmrs': [0, 3072, 6]
+  fft_size: 4096
+  num_guard_subcarriers: 1024
+  num_symbol: 14
+  cp_length: 590  # ns
+  max_random_tap_delay_cp_proportion: 0.2
+  rnd_seed: 0
+  num_workers: 0
+  is_phase_noise: False
+  is_channel: True
+  is_noise: True
+
+# Training settings
+training:
+  lr: 0.0001
+  weight_decay: 0.000001
+  max_norm: 1.0
+  num_iter: 100000
+  logging_step: 50
+  evaluation_step: 2000
+  evaluation_batch_size: 4
+  pn_train_start_iter: 50000
+  use_scheduler: True
+  num_warmup_steps: 0
+  use_early_stopping: false
+  device: 'cuda:0'
+  use_wandb: True
+  pretrained_model_name: 'Large_estimator_v3_base_extended_final'
+  ch_loss_weight: 1
+  num_freeze_layers: 4
+  model_load_mode: 'pretrained'
+  load_model_path: ''
+  model_save_step: 20000
+
+# Channel estimation model settings
+ch_estimation:
+  cond:
+    length: 3072
+    in_channels: 2
+    step_size: 12
+    steps_per_token: 1
+  transformer:
+    length: 3072
+    channels: 2
+    num_layers: 4
+    d_model: 128
+    n_token: 256
+    n_head: 8
+    dim_feedforward: 1024
+    dropout: 0.1
+    activation: 'relu'
+
+  adapter:
+    enabled: true
+    dropout: 0.1
+
+auto_upload:
+  enabled: false
+  repository: "https://github.com/Joowonoil/vastai_trained_model.git"
+  include_config: true
+  include_training_log: true

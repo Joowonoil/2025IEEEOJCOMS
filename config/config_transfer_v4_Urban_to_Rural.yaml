@@ -1,0 +1,79 @@
+# Urban to Rural Transfer Learning Configuration
+# Base: Urban (UMa + UMi) → Target: Rural (RMa)
+# LoRA를 사용한 도시→농촌 도메인 적응
+
+dataset:
+  channel_type: ["RMa_Los", "RMa_Nlos"]  # Rural target environment
+  batch_size: 32
+  noise_spectral_density: -174.0  # dBm/Hz
+  subcarrier_spacing: 120.0  # kHz
+  transmit_power: 30.0  # dBm
+  distance_range: [10.0, 500.0]  # Unified range for all transfers
+  carrier_freq: 28.0  # GHz
+  mod_order: 64
+  ref_conf_dict:
+    'dmrs': [0, 3072, 6]
+  fft_size: 4096
+  num_guard_subcarriers: 1024
+  num_symbol: 14
+  cp_length: 590  # cyclic prefix length (ns)
+  max_random_tap_delay_cp_proportion: 0.2
+  rnd_seed: 0
+  num_workers: 0
+  is_phase_noise: False
+  is_channel: True
+  is_noise: True
+
+training:
+  lr: 0.0001
+  weight_decay: 0.000001
+  max_norm: 1.0
+  num_iter: 60000  # Transfer learning iterations
+  logging_step: 50
+  evaluation_step: 1000
+  evaluation_batch_size: 4
+  disable_plotting: true  # Disable plotting to prevent lag
+  pn_train_start_iter: 50000
+  use_scheduler: True
+  num_warmup_steps: 0
+  use_early_stopping: false
+  device: 'cuda:0'
+  use_wandb: True
+  wandb_proj: 'DNN_channel_estimation_Urban_to_Rural_Transfer'
+  pretrained_model_name: 'Large_estimator_v4_urban_base'  # Urban base model
+  ch_loss_weight: 1
+  saved_model_name: 'Large_estimator_v4_Urban_to_Rural'
+  num_freeze_layers: 0  # LoRA handles freezing
+  model_load_mode: 'pretrained'
+  load_model_path: ''
+  model_save_step: 5000
+
+ch_estimation:
+  cond:
+    length: 3072
+    in_channels: 2
+    step_size: 12
+    steps_per_token: 1
+  transformer:
+    length: 3072
+    channels: 2
+    num_layers: 4
+    d_model: 128
+    n_token: 256
+    n_head: 8
+    dim_feedforward: 1024
+    dropout: 0.1
+    activation: 'relu'
+
+  peft:  # LoRA configuration for transfer learning
+    peft_type: LORA
+    r: 8  # Higher rank for cross-domain transfer
+    lora_alpha: 16
+    target_modules: ["mha_q_proj", "mha_k_proj", "mha_v_proj", "ffnn_linear1", "ffnn_linear2"]  # More modules for better adaptation
+    lora_dropout: 0.05
+
+auto_upload:
+  enabled: false
+  repository: "https://github.com/Joowonoil/vastai_trained_model.git"
+  include_config: true
+  include_training_log: true

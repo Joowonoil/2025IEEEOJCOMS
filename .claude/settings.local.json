@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(cp:*)",
+      "Bash(pip install:*)",
+      "Bash(cmd /c \"C:\\Users\\calor\\AppData\\Local\\Programs\\MiKTeX\\miktex\\bin\\x64\\miktex.exe packages update\")",
+      "Bash(winget uninstall:*)",
+      "Bash(winget install:*)",
+      "Bash(. venv/Scripts/activate)"
+    ],
+    "deny": [],
+    "defaultMode": "acceptEdits"
+  }
+}
