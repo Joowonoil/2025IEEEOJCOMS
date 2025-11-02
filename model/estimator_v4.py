@@ -2,7 +2,6 @@ from dataset import get_dataset_and_dataloader # 데이터셋 및 데이터로�
 import torch # PyTorch 라이브러리 임포트
 import torch.nn as nn # 신경망 모듈 임포트
 import torch.nn.functional as F # 함수형 API 임포트
-import torch_tensorrt # Torch-TensorRT 임포트 (모델 최적화용, 현재 사용되지 않음)
 import math # 수학 함수 임포트
 import numpy as np # NumPy 라이브러리 임포트 (수치 연산용)
 from pathlib import Path # 파일 경로 관리를 위한 Path 객체 임포트

@@ -2,7 +2,6 @@ from dataset import get_dataset_and_dataloader
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch_tensorrt
 import math
 import numpy as np
 from pathlib import Path
