@@ -162,8 +162,9 @@ class LoRAParetoEngine:
         else:
             save_path = saved_model_dir / f"{base_name}_iter_{iteration}.pt"
 
-        merged_model = self._estimator.merge_and_unload()
-        torch.save(merged_model, save_path)
+        # Save state_dict only to avoid modifying the original model
+        # merge_and_unload() would remove LoRA layers and break training
+        torch.save(self._estimator.state_dict(), save_path)
         print(f"[{self._scenario_name}-{self._rank_config_name}] Saved: {save_path}")
 
 
