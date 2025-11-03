@@ -41,11 +41,50 @@ RAM: 32GB+
 Disk: 100GB+
 ```
 
-**4개 인스턴스 대여:**
+**기본 설정 (4개 인스턴스):**
 - Instance 1: Adapter (20 runs)
 - Instance 2: LoRA (20 runs)
 - Instance 3: Prompt (15 runs)
 - Instance 4: Hybrid (15 runs)
+
+---
+
+### 💡 시간 절약 팁: 양방향 병렬 실행 (8개 인스턴스)
+
+**시간을 절반으로 줄이고 싶다면 8개 인스턴스 사용!**
+
+**전략:**
+- **Set A (4개)**: InH부터 시작 → RMa로 진행 (정방향)
+- **Set B (4개)**: RMa부터 시작 → InH로 진행 (역방향)
+- **양쪽에서 만나므로 시간 절반!**
+
+**Set A (기본):**
+```bash
+# InH-dim8 → InH-dim16 → ... → RMa-dim64
+nohup python Transfer_Pareto_Adapter.py > adapter.log 2>&1 &
+nohup python Transfer_Pareto_LoRA.py > lora.log 2>&1 &
+nohup python Transfer_Pareto_Prompt.py > prompt.log 2>&1 &
+nohup python Transfer_Pareto_Hybrid.py > hybrid.log 2>&1 &
+```
+
+**Set B (역순):**
+```bash
+# RMa-dim64 → RMa-dim32 → ... → InH-dim8
+nohup python Transfer_Pareto_Adapter_Reverse.py > adapter.log 2>&1 &
+nohup python Transfer_Pareto_LoRA_Reverse.py > lora.log 2>&1 &
+nohup python Transfer_Pareto_Prompt_Reverse.py > prompt.log 2>&1 &
+nohup python Transfer_Pareto_Hybrid_Reverse.py > hybrid.log 2>&1 &
+```
+
+**효과:**
+- 4개 인스턴스: 40-80시간
+- 8개 인스턴스: **20-40시간** (절반!)
+- 비용: 2배이지만 시간은 절반
+
+**주의:**
+- 같은 run을 중복 실행하지 않도록 주의
+- WandB에서 양쪽 진행상황 모니터링
+- 중간에서 만나면 불필요한 인스턴스 종료
 
 ---
 
