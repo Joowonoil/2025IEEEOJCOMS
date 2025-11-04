@@ -64,11 +64,22 @@ Performance (NMSE)
 | **Prompt** | len50 | length=50 | 6,400 | 0.47% |
 | | len100 | length=100 | 12,800 | 0.94% |
 | | len200 | length=200 | 25,600 | 1.89% |
-| **Hybrid** | p50_r5 | (prompt=50, rank=5) | ~30,230 | 2.23% |
+| **Hybrid (Base)** | p50_r5 | (prompt=50, rank=5) | ~30,230 | 2.23% |
 | | p100_r10 | (prompt=100, rank=10) | ~61,952 | 4.57% |
 | | p200_r20 | (prompt=200, rank=20) | ~123,904 | 9.14% |
+| **Hybrid (Extra)** | p25_r2 | (prompt=25, rank=2) | ~12,752 | 0.94% |
+| | p75_r8 | (prompt=75, rank=8) | ~48,896 | 3.61% |
+| | p100_r5 | (prompt=100, rank=5) | ~36,630 | 2.70% |
+| | p50_r10 | (prompt=50, rank=10) | ~55,552 | 4.10% |
+| | p150_r15 | (prompt=150, rank=15) | ~92,672 | 6.83% |
+| | p300_r25 | (prompt=300, rank=25) | ~161,280 | 11.89% |
 
-**Total Configurations**: 4 + 4 + 3 + 3 = **14 configs**
+**Total Configurations**: 4 + 4 + 3 + (3+6) = **20 configs**
+
+**Note**: Hybrid expanded from 3 to 9 configs to create richer Pareto frontier:
+- **Option 1** (Mid-density): p75_r8, p150_r15 - Fill gaps in curve
+- **Option 2** (Extreme points): p25_r2, p300_r25 - Boundary exploration
+- **Option 3** (Asymmetric): p50_r10, p100_r5 - Prompt vs LoRA trade-off analysis
 
 ### 2.3 Scenarios
 
@@ -82,16 +93,48 @@ All methods tested on **5 scenarios**:
 ### 2.4 Total Experimental Load
 
 ```
-14 configs × 5 scenarios = 70 runs
+20 configs × 5 scenarios = 100 runs
 
 Breakdown:
-- Adapter:  4 configs × 5 scenarios = 20 runs (~40 hours)
-- LoRA:     4 configs × 5 scenarios = 20 runs (~40 hours)
-- Prompt:   3 configs × 5 scenarios = 15 runs (~60 hours)
-- Hybrid:   3 configs × 5 scenarios = 15 runs (~30 hours)
+- Adapter:       4 configs × 5 scenarios = 20 runs (~40 hours)
+- LoRA:          4 configs × 5 scenarios = 20 runs (~40 hours)
+- Prompt:        3 configs × 5 scenarios = 15 runs (~30 hours)
+- Hybrid (Base): 3 configs × 5 scenarios = 15 runs (~30 hours)
+- Hybrid (Extra):6 configs × 5 scenarios = 30 runs (~60 hours)
 
-Total time estimate: 140-280 hours (6-12 days)
+Total time estimate: 200-400 hours (8-16 days) with single GPU
+With bidirectional parallel execution (8 instances): 20-40 hours!
 ```
+
+### 2.5 Bidirectional Parallel Execution Strategy
+
+**Challenge**: Sequential execution would take 8-16 days
+
+**Solution**: Deploy 8 Vast.ai instances running experiments from both ends simultaneously:
+
+**Set A (Forward - 4 instances):**
+```
+Instance 1: Adapter    (InH-dim8 → InH-dim16 → ... → RMa-dim64)
+Instance 2: LoRA       (InH-r4 → InH-r8 → ... → RMa-r20)
+Instance 3: Prompt     (InH-len50 → ... → RMa-len200)
+Instance 4: Hybrid     (InH-p50_r5 → ... → RMa-p200_r20)
+```
+
+**Set B (Reverse - 4 instances):**
+```
+Instance 5: Adapter    (RMa-dim64 → ... → InH-dim8)
+Instance 6: LoRA       (RMa-r20 → ... → InH-r4)
+Instance 7: Prompt     (RMa-len200 → ... → InH-len50)
+Instance 8: Hybrid     (RMa-p200_r20 → ... → InH-p50_r5)
+```
+
+**Extra Hybrid (2 additional instances):**
+```
+Instance 9:  Hybrid Extra Forward  (InH-p75_r8 → ... → RMa-p300_r25)
+Instance 10: Hybrid Extra Reverse  (RMa-p100_r5 → ... → InH-p25_r2)
+```
+
+**Result**: All experiments complete when sets meet in the middle (~20-40 hours)
 
 ---
 

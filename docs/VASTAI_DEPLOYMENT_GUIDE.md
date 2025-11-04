@@ -86,6 +86,34 @@ nohup python Transfer_Pareto_Hybrid_Reverse.py > hybrid.log 2>&1 &
 - WandB에서 양쪽 진행상황 모니터링
 - 중간에서 만나면 불필요한 인스턴스 종료
 
+### 💡💡 추가: Hybrid Extra 실험 (2개 인스턴스 더)
+
+**목적**: Hybrid Pareto frontier를 더 풍부하게 만들기 (3→9 configs)
+
+**추가 6개 config:**
+- **Option 1** (중간 밀도): p75_r8, p150_r15 - 곡선 빈틈 채우기
+- **Option 2** (극단값): p25_r2, p300_r25 - 경계 탐색
+- **Option 3** (비대칭): p50_r10, p100_r5 - Prompt vs LoRA 기여도 비교
+
+**Set Extra-A (정방향):**
+```bash
+nohup python Transfer_Pareto_Hybrid_Extra.py > hybrid_extra.log 2>&1 &
+# InH-p75_r8 → ... → RMa-p300_r25
+```
+
+**Set Extra-B (역방향):**
+```bash
+nohup python Transfer_Pareto_Hybrid_Extra_Reverse.py > hybrid_extra.log 2>&1 &
+# RMa-p100_r5 → ... → InH-p25_r2
+```
+
+**결과:**
+- 기존 Hybrid: 3 configs × 5 scenarios = 15 runs
+- Extra Hybrid: 6 configs × 5 scenarios = 30 runs
+- **총 Hybrid: 45 runs** (9 configs, 훨씬 정밀한 Pareto curve!)
+
+**총 실험: 100 runs** (기존 70 + Extra 30)
+
 ---
 
 ### 2. 데이터 준비 (로컬에서 한 번만)
@@ -344,11 +372,13 @@ rm -rf /tmp/*
 - Adapter: 20 final + 100 checkpoints = 120개
 - LoRA: 20 final + 100 checkpoints = 120개
 - Prompt: 15 final + 75 checkpoints = 90개
-- Hybrid: 15 final + 75 checkpoints = 90개
-- **총 420개 파일**
+- Hybrid (Base): 15 final + 75 checkpoints = 90개
+- Hybrid (Extra): 30 final + 150 checkpoints = 180개
+- **총 600개 파일**
 
 **WandB Runs:**
-- 총 70개 runs (4 methods × 5 scenarios × 3-4 configs)
+- 총 100개 runs (기존 70 + Hybrid Extra 30)
+- 4 methods × 5 scenarios × (3-9 configs)
 
 ---
 
