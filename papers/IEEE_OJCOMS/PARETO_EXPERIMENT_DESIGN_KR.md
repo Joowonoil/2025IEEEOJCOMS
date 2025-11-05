@@ -85,7 +85,7 @@
 
 모든 방법을 **5개 시나리오**에서 테스트:
 1. **InH** (Indoor Hotspot): 실내 밀집, LoS/NLoS
-2. **InF** (Indoor Factory): 5개 하위 시나리오 (SL, SH, DL, DH, HH)
+2. **InF** (Indoor Factory): 실내 공장, LoS/NLoS
 3. **UMi** (Urban Micro): 소형 셀 도시, LoS/NLoS
 4. **UMa** (Urban Macro): 대형 셀 도시, LoS/NLoS
 5. **RMa** (Rural Macro): 확장 범위 농촌, LoS/NLoS
