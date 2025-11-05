@@ -525,90 +525,254 @@ class ParetoAnalyzer:
         print(f"[OK] Saved {heatmap_path}")
         plt.close()
 
-        # 2. Simplified Transfer Effectiveness: In-domain vs Best Cross-domain
-        print("[2/2] Generating simplified transfer effectiveness plots...")
+        # 2. In-domain Performance Comparison: Parameter Size Effect
+        print("[2/2] Generating in-domain parameter comparison plots...")
 
         methods = ['Adapter', 'LoRA', 'Prompt', 'Hybrid']
         fig, axes = plt.subplots(2, 2, figsize=(20, 14))
         axes = axes.flatten()
 
+        # 파라미터별 색상 (작은 것 → 큰 것)
+        param_colors = ['#4CAF50', '#2196F3', '#FF9800', '#F44336']  # 초록 → 파랑 → 주황 → 빨강
+
         for idx, method in enumerate(methods):
             ax = axes[idx]
 
-            # 해당 방법의 모델들 필터링
-            method_results = [r for r in results if r['method'] == method]
+            # 해당 방법의 In-domain 결과만 필터링
+            method_results = [r for r in results
+                            if r['method'] == method and r['train_env'] == r['test_env']]
 
             if not method_results:
                 ax.set_title(f'{method} - No Data', fontsize=15, fontweight='bold')
                 continue
 
-            # 각 테스트 환경별 데이터 수집
-            x_labels = []
-            in_domain_improvements = []
-            best_cross_domain_improvements = []
+            # 해당 방법의 config 목록 (파라미터 순으로 정렬)
+            configs = sorted(self.config_params[method].keys(),
+                           key=lambda x: self.config_params[method][x])
 
-            for test_env in test_envs:
-                x_labels.append(test_env)
-                base_nmse = base_performance.get(test_env, 0)
+            # 각 환경별로 그룹화
+            x = np.arange(len(test_envs))
+            width = 0.8 / len(configs)  # 막대 너비 자동 조정
 
-                # 1) In-domain: train_env == test_env
-                in_domain = [r for r in method_results
-                            if r['train_env'] == test_env and r['test_env'] == test_env]
-                if in_domain:
-                    best_in_domain_nmse = min(r['nmse_db'] for r in in_domain)
-                    in_domain_improvements.append(best_in_domain_nmse - base_nmse)
-                else:
-                    in_domain_improvements.append(np.nan)
+            for config_idx, config in enumerate(configs):
+                improvements = []
 
-                # 2) Cross-domain: train_env != test_env 중 최고
-                cross_domain = [r for r in method_results
-                               if r['train_env'] != test_env and r['test_env'] == test_env]
-                if cross_domain:
-                    best_cross_domain_nmse = min(r['nmse_db'] for r in cross_domain)
-                    best_cross_domain_improvements.append(best_cross_domain_nmse - base_nmse)
-                else:
-                    best_cross_domain_improvements.append(np.nan)
+                for test_env in test_envs:
+                    base_nmse = base_performance.get(test_env, 0)
 
-            # 막대 그래프
-            x = np.arange(len(x_labels))
-            width = 0.35
+                    # In-domain: train_env == test_env, 특정 config
+                    matching = [r for r in method_results
+                               if r['test_env'] == test_env and r['config'] == config]
 
-            ax.bar(x - width/2, in_domain_improvements, width,
-                  label='In-domain (train=test)',
-                  color='#2E7D32',  # 진한 초록
-                  alpha=0.85,
-                  edgecolor='black',
-                  linewidth=1)
+                    if matching:
+                        nmse = matching[0]['nmse_db']
+                        improvements.append(nmse - base_nmse)
+                    else:
+                        improvements.append(np.nan)
 
-            ax.bar(x + width/2, best_cross_domain_improvements, width,
-                  label='Best Cross-domain (train≠test)',
-                  color='#1976D2',  # 진한 파랑
-                  alpha=0.85,
-                  edgecolor='black',
-                  linewidth=1)
+                # 막대 그래프
+                offset = (config_idx - len(configs)/2 + 0.5) * width
+                ax.bar(x + offset, improvements, width,
+                      label=config,
+                      color=param_colors[config_idx % len(param_colors)],
+                      alpha=0.85,
+                      edgecolor='black',
+                      linewidth=0.8)
 
             # 0선 강조 (Base 기준선)
             ax.axhline(y=0, color='black', linestyle='--', linewidth=2, alpha=0.8)
 
-            ax.set_xlabel('Test Environment', fontsize=13, fontweight='bold')
+            ax.set_xlabel('Scenario (In-domain)', fontsize=13, fontweight='bold')
             ax.set_ylabel('Improvement vs Base (dB)', fontsize=13, fontweight='bold')
-            ax.set_title(f'{method}: In-domain vs Cross-domain Transfer\n(Negative = Better)',
+            ax.set_title(f'{method}: Parameter Size Effect on In-domain Performance\n(Negative = Better)',
                         fontsize=14, fontweight='bold', pad=15)
             ax.set_xticks(x)
-            ax.set_xticklabels(x_labels, fontsize=12)
-            ax.legend(fontsize=11, loc='best', framealpha=0.95, edgecolor='black')
+            ax.set_xticklabels(test_envs, fontsize=12)
+            ax.legend(fontsize=10, loc='best', framealpha=0.95, edgecolor='black',
+                     title='Config', title_fontsize=11)
             ax.grid(True, axis='y', alpha=0.3, linestyle='--')
 
             # Y축 범위 설정
             ax.set_ylim(-2.5, 2.5)
 
-        plt.suptitle('Transfer Learning Effectiveness: In-domain vs Cross-domain Performance\n(Best configuration per scenario)',
+        plt.suptitle('In-domain Performance: Parameter Configuration Comparison\n(Train and test on same scenario)',
                     fontsize=16, fontweight='bold')
         plt.tight_layout()
 
         transfer_path = Path(__file__).parent / 'pareto_transfer_effectiveness.png'
         plt.savefig(transfer_path, dpi=300, bbox_inches='tight')
         print(f"[OK] Saved {transfer_path}")
+        plt.close()
+
+        # 3. Domain별 In-domain 성능 비교
+        print("[3/4] Generating domain-wise in-domain comparison...")
+        self.plot_domain_indomain_comparison(results, base_performance, test_envs)
+
+        # 4. Domain별 Cross-environment 성능 비교
+        print("[4/4] Generating domain-wise cross-environment comparison...")
+        self.plot_domain_crossenv_comparison(results, base_performance, test_envs)
+
+    def plot_domain_indomain_comparison(self, results, base_performance, test_envs):
+        """Domain별 In-domain 성능 비교 (각 도메인에서 PEFT 방법 비교)"""
+        methods = ['Adapter', 'LoRA', 'Prompt', 'Hybrid']
+
+        # Base 모델 전체 파라미터 수
+        base_total_params = 1_356_000
+
+        # 1행 5열 레이아웃
+        fig, axes = plt.subplots(1, 5, figsize=(25, 5))
+
+        # 방법별 색상
+        method_colors = {
+            'Adapter': '#1E88E5',
+            'LoRA': '#7B1FA2',
+            'Prompt': '#E53935',
+            'Hybrid': '#00897B'
+        }
+
+        for idx, test_env in enumerate(test_envs):
+            ax = axes[idx]
+
+            improvements = []
+            param_ratios = []
+            labels = []
+            colors = []
+
+            base_nmse = base_performance.get(test_env, 0)
+
+            for method in methods:
+                # In-domain: train_env == test_env
+                in_domain = [r for r in results
+                            if r['method'] == method
+                            and r['train_env'] == test_env
+                            and r['test_env'] == test_env]
+
+                if in_domain:
+                    # 최고 성능 config 찾기
+                    best = min(in_domain, key=lambda x: x['nmse_db'])
+                    improvement = best['nmse_db'] - base_nmse
+                    param_ratio = (best['params'] / base_total_params) * 100
+                    improvements.append(improvement)
+                    param_ratios.append(param_ratio)
+                else:
+                    improvements.append(0)
+                    param_ratios.append(0)
+
+                labels.append(method)
+                colors.append(method_colors[method])
+
+            # 막대 그래프
+            x = np.arange(len(methods))
+            bars = ax.bar(x, improvements, color=colors, alpha=0.85,
+                         edgecolor='black', linewidth=1.5)
+
+            # 막대 위에 파라미터 비율 표시
+            for i, (bar, ratio) in enumerate(zip(bars, param_ratios)):
+                if ratio > 0:
+                    height = bar.get_height()
+                    # 막대 위치에 따라 텍스트 위치 조정
+                    y_offset = 0.15 if height >= 0 else -0.25
+                    ax.text(bar.get_x() + bar.get_width()/2., height + y_offset,
+                           f'{ratio:.2f}%',
+                           ha='center', va='bottom' if height >= 0 else 'top',
+                           fontsize=9, fontweight='bold', color='black')
+
+            # 0선 강조
+            ax.axhline(y=0, color='black', linestyle='--', linewidth=2, alpha=0.8)
+
+            ax.set_xlabel('PEFT Method', fontsize=12, fontweight='bold')
+            ax.set_ylabel('Improvement vs Base (dB)', fontsize=12, fontweight='bold')
+            ax.set_title(f'{test_env}\n(In-domain)', fontsize=14, fontweight='bold', pad=10)
+            ax.set_xticks(x)
+            ax.set_xticklabels(labels, fontsize=11)
+            ax.grid(True, axis='y', alpha=0.3, linestyle='--')
+            ax.set_ylim(-2.5, 2.5)
+
+        plt.suptitle('In-domain Performance Comparison by Scenario\n(Best configuration per method | Negative = Better)',
+                    fontsize=16, fontweight='bold')
+        plt.tight_layout()
+
+        save_path = Path(__file__).parent / 'pareto_domain_indomain.png'
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"[OK] Saved {save_path}")
+        plt.close()
+
+    def plot_domain_crossenv_comparison(self, results, base_performance, test_envs):
+        """Domain별 Cross-environment 성능 비교 (모든 train-test 조합)"""
+        methods = ['Adapter', 'LoRA', 'Prompt', 'Hybrid']
+
+        # 2행 3열 레이아웃 (5개 + 1개 빈 공간)
+        fig, axes = plt.subplots(2, 3, figsize=(24, 14))
+        axes = axes.flatten()
+
+        # Train env별 색상 (일관성)
+        train_colors = {
+            'InH': '#4CAF50',
+            'InF': '#2196F3',
+            'UMi': '#FF9800',
+            'UMa': '#9C27B0',
+            'RMa': '#F44336'
+        }
+
+        for idx, test_env in enumerate(test_envs):
+            ax = axes[idx]
+
+            base_nmse = base_performance.get(test_env, 0)
+
+            # 각 방법별로 그룹화
+            x_positions = np.arange(len(methods))
+            width = 0.15
+
+            for train_idx, train_env in enumerate(test_envs):
+                improvements = []
+
+                for method in methods:
+                    # train_env에서 학습 -> test_env에서 테스트
+                    matching = [r for r in results
+                               if r['method'] == method
+                               and r['train_env'] == train_env
+                               and r['test_env'] == test_env]
+
+                    if matching:
+                        # 최고 성능 config
+                        best_nmse = min(r['nmse_db'] for r in matching)
+                        improvement = best_nmse - base_nmse
+                        improvements.append(improvement)
+                    else:
+                        improvements.append(np.nan)
+
+                # 막대 그래프
+                offset = (train_idx - 2) * width  # 중앙 정렬
+                ax.bar(x_positions + offset, improvements, width,
+                      label=f'Train: {train_env}',
+                      color=train_colors[train_env],
+                      alpha=0.85,
+                      edgecolor='black',
+                      linewidth=0.8)
+
+            # 0선 강조
+            ax.axhline(y=0, color='black', linestyle='--', linewidth=2, alpha=0.8)
+
+            ax.set_xlabel('PEFT Method', fontsize=12, fontweight='bold')
+            ax.set_ylabel('Improvement vs Base (dB)', fontsize=12, fontweight='bold')
+            ax.set_title(f'Test on {test_env}\n(All training scenarios)',
+                        fontsize=14, fontweight='bold', pad=10)
+            ax.set_xticks(x_positions)
+            ax.set_xticklabels(methods, fontsize=11)
+            ax.legend(fontsize=9, loc='best', framealpha=0.95, edgecolor='black')
+            ax.grid(True, axis='y', alpha=0.3, linestyle='--')
+            ax.set_ylim(-2.5, 2.5)
+
+        # 마지막 subplot 제거
+        fig.delaxes(axes[5])
+
+        plt.suptitle('Cross-environment Performance Comparison by Test Scenario\n(Best configuration per method | Negative = Better)',
+                    fontsize=16, fontweight='bold')
+        plt.tight_layout()
+
+        save_path = Path(__file__).parent / 'pareto_domain_crossenv.png'
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"[OK] Saved {save_path}")
         plt.close()
 
     def analyze_iterations(self, sample_configs=None, save_suffix=''):
