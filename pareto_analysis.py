@@ -525,18 +525,12 @@ class ParetoAnalyzer:
         print(f"[OK] Saved {heatmap_path}")
         plt.close()
 
-        # 2. Grouped Bar Chart: 방법별 전이학습 효과 (Base 대비 개선도)
-        print("[2/2] Generating transfer learning effectiveness plots...")
-
-        # seaborn 스타일 적용
-        sns.set_style("whitegrid")
+        # 2. Simplified Transfer Effectiveness: In-domain vs Best Cross-domain
+        print("[2/2] Generating simplified transfer effectiveness plots...")
 
         methods = ['Adapter', 'LoRA', 'Prompt', 'Hybrid']
-        fig, axes = plt.subplots(2, 2, figsize=(22, 18))
+        fig, axes = plt.subplots(2, 2, figsize=(20, 14))
         axes = axes.flatten()
-
-        # 환경별 색상 팔레트 (일관성 있는 컬러)
-        env_colors = sns.color_palette("husl", len(test_envs))
 
         for idx, method in enumerate(methods):
             ax = axes[idx]
@@ -548,54 +542,67 @@ class ParetoAnalyzer:
                 ax.set_title(f'{method} - No Data', fontsize=15, fontweight='bold')
                 continue
 
-            # 전이학습 환경별로 그룹화
-            train_envs = sorted(set(r['train_env'] for r in method_results))
+            # 각 테스트 환경별 데이터 수집
+            x_labels = []
+            in_domain_improvements = []
+            best_cross_domain_improvements = []
 
-            # Bar 위치 계산
-            x = np.arange(len(train_envs))
-            width = 0.15
-
-            # 테스트 환경별로 막대 그리기 (Base 대비 개선도)
-            for i, test_env in enumerate(test_envs):
-                improvement_values = []
+            for test_env in test_envs:
+                x_labels.append(test_env)
                 base_nmse = base_performance.get(test_env, 0)
 
-                for train_env in train_envs:
-                    # 해당 train_env에서 test_env로 테스트한 결과 찾기
-                    matching = [r for r in method_results
-                               if r['train_env'] == train_env and r['test_env'] == test_env]
-                    if matching:
-                        # 같은 train_env의 여러 config 중 최고 성능
-                        best_nmse = min(r['nmse_db'] for r in matching)
-                        # Base 대비 개선도 계산
-                        improvement = best_nmse - base_nmse
-                        improvement_values.append(improvement)
-                    else:
-                        improvement_values.append(np.nan)
+                # 1) In-domain: train_env == test_env
+                in_domain = [r for r in method_results
+                            if r['train_env'] == test_env and r['test_env'] == test_env]
+                if in_domain:
+                    best_in_domain_nmse = min(r['nmse_db'] for r in in_domain)
+                    in_domain_improvements.append(best_in_domain_nmse - base_nmse)
+                else:
+                    in_domain_improvements.append(np.nan)
 
-                ax.bar(x + i * width, improvement_values, width,
-                      label=f'Test: {test_env}',
-                      color=env_colors[i],
-                      alpha=0.85,
-                      edgecolor='black',
-                      linewidth=0.5)
+                # 2) Cross-domain: train_env != test_env 중 최고
+                cross_domain = [r for r in method_results
+                               if r['train_env'] != test_env and r['test_env'] == test_env]
+                if cross_domain:
+                    best_cross_domain_nmse = min(r['nmse_db'] for r in cross_domain)
+                    best_cross_domain_improvements.append(best_cross_domain_nmse - base_nmse)
+                else:
+                    best_cross_domain_improvements.append(np.nan)
 
-            # 0선 강조 (Base 성능 기준선)
-            ax.axhline(y=0, color='black', linestyle='-', alpha=0.8, linewidth=1.5)
+            # 막대 그래프
+            x = np.arange(len(x_labels))
+            width = 0.35
 
-            ax.set_xlabel('Training Environment', fontsize=12, fontweight='bold')
-            ax.set_ylabel('Improvement vs Base (dB)', fontsize=12, fontweight='bold')
-            ax.set_title(f'{method} Transfer Learning Effectiveness\n(Negative = Better than Base)',
-                        fontsize=15, fontweight='bold', pad=15)
-            ax.set_xticks(x + width * 2)
-            ax.set_xticklabels(train_envs, fontsize=11)
-            ax.legend(fontsize=10, loc='best', framealpha=0.9, edgecolor='black')
-            ax.grid(True, axis='y', alpha=0.4, linestyle='--')
+            ax.bar(x - width/2, in_domain_improvements, width,
+                  label='In-domain (train=test)',
+                  color='#2E7D32',  # 진한 초록
+                  alpha=0.85,
+                  edgecolor='black',
+                  linewidth=1)
 
-            # Y축 범위 설정 (개선도 기준)
+            ax.bar(x + width/2, best_cross_domain_improvements, width,
+                  label='Best Cross-domain (train≠test)',
+                  color='#1976D2',  # 진한 파랑
+                  alpha=0.85,
+                  edgecolor='black',
+                  linewidth=1)
+
+            # 0선 강조 (Base 기준선)
+            ax.axhline(y=0, color='black', linestyle='--', linewidth=2, alpha=0.8)
+
+            ax.set_xlabel('Test Environment', fontsize=13, fontweight='bold')
+            ax.set_ylabel('Improvement vs Base (dB)', fontsize=13, fontweight='bold')
+            ax.set_title(f'{method}: In-domain vs Cross-domain Transfer\n(Negative = Better)',
+                        fontsize=14, fontweight='bold', pad=15)
+            ax.set_xticks(x)
+            ax.set_xticklabels(x_labels, fontsize=12)
+            ax.legend(fontsize=11, loc='best', framealpha=0.95, edgecolor='black')
+            ax.grid(True, axis='y', alpha=0.3, linestyle='--')
+
+            # Y축 범위 설정
             ax.set_ylim(-2.5, 2.5)
 
-        plt.suptitle('Parameter-Efficient Transfer Learning: Improvement vs Base Model\n(Negative values indicate better performance than Base)',
+        plt.suptitle('Transfer Learning Effectiveness: In-domain vs Cross-domain Performance\n(Best configuration per scenario)',
                     fontsize=16, fontweight='bold')
         plt.tight_layout()
 
@@ -678,16 +685,18 @@ class ParetoAnalyzer:
         """수렴 곡선 그래프 생성 - 시나리오별로 방법 비교"""
         print(f"\nGenerating convergence curves{' (' + save_suffix + ')' if save_suffix else ''}...")
 
+        import matplotlib.colors as mcolors
+
         # 2x3 레이아웃 (5개 시나리오 + 1개 빈 공간)
         fig, axes = plt.subplots(2, 3, figsize=(24, 14))
         axes = axes.flatten()
 
-        # 방법별 색상 및 마커
+        # 방법별 예쁜 색상 (Material Design + 가독성 고려)
         method_colors = {
-            'Adapter': '#3498db',
-            'LoRA': '#2ecc71',
-            'Prompt': '#e74c3c',
-            'Hybrid': '#f39c12'
+            'Adapter': '#1E88E5',  # 밝은 파랑
+            'LoRA': '#7B1FA2',     # 보라
+            'Prompt': '#E53935',   # 산호 빨강
+            'Hybrid': '#00897B'    # 청록
         }
         method_markers = {
             'Adapter': 'o',
@@ -703,37 +712,41 @@ class ParetoAnalyzer:
             # 해당 시나리오의 데이터 필터링
             scenario_data = [r for r in iteration_results if r['scenario'] == scenario]
 
-            # 방법별로 수렴 곡선 그리기
+            # 방법별로 수렴 곡선 그리기 (각 방법의 최고 성능 config만)
             for method in sorted(set(r['method'] for r in scenario_data)):
                 method_models = [r for r in scenario_data if r['method'] == method]
 
-                if method_models:
-                    model = method_models[0]  # 샘플 config 하나
+                if not method_models:
+                    continue
 
-                    # X: Iteration, Y: NMSE
-                    x_vals = []
-                    y_vals = []
+                # 해당 시나리오에서 Final 성능이 가장 좋은 config 선택
+                best_model = min(method_models, key=lambda x: x.get('final', float('inf')))
 
-                    # Iteration 체크포인트들
-                    for iter_num in iterations:
-                        key = f'iter_{iter_num}'
-                        if key in model:
-                            x_vals.append(iter_num / 1000)  # K 단위로 변환
-                            y_vals.append(model[key])
+                # X: Iteration, Y: NMSE
+                x_vals = []
+                y_vals = []
 
-                    # Final 추가 (100K iteration)
-                    if 'final' in model:
-                        x_vals.append(100)  # Final은 100K
-                        y_vals.append(model['final'])
+                # Iteration 체크포인트들
+                for iter_num in iterations:
+                    key = f'iter_{iter_num}'
+                    if key in best_model:
+                        x_vals.append(iter_num / 1000)  # K 단위로 변환
+                        y_vals.append(best_model[key])
 
-                    if x_vals and len(x_vals) > 1:  # 최소 2개 이상의 포인트가 있을 때만 그리기
-                        ax.plot(x_vals, y_vals,
-                               marker=method_markers[method],
-                               color=method_colors[method],
-                               label=f'{method} ({model["config"]})',
-                               linewidth=2.5,
-                               markersize=8,
-                               alpha=0.85)
+                # Final 추가 (100K iteration)
+                if 'final' in best_model:
+                    x_vals.append(100)  # Final은 100K
+                    y_vals.append(best_model['final'])
+
+                if x_vals and len(x_vals) >= 2:
+                    ax.plot(x_vals, y_vals,
+                           marker=method_markers[method],
+                           color=method_colors[method],
+                           label=f'{method} ({best_model["config"]})',
+                           linewidth=2.5,
+                           markersize=8,
+                           alpha=0.85,
+                           zorder=3)
 
             # 축 설정
             ax.set_xlabel('Training Iterations (K)', fontsize=12, fontweight='bold')
