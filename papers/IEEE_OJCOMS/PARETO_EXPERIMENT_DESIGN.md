@@ -84,11 +84,11 @@ Performance (NMSE)
 ### 2.3 Scenarios
 
 All methods tested on **5 scenarios**:
-1. **InH** (Indoor Hotspot): Dense indoor, LoS/NLoS
-2. **InF** (Indoor Factory): 5 sub-scenarios (SL, SH, DL, DH, HH)
-3. **UMi** (Urban Micro): Small cell urban, LoS/NLoS
-4. **UMa** (Urban Macro): Large cell urban, LoS/NLoS
-5. **RMa** (Rural Macro): Extended range rural, LoS/NLoS
+1. **InH** (Indoor Hotspot): Dense indoor, LoS/NLoS, 5-100m
+2. **InF** (Indoor Factory): Industrial indoor, LoS/NLoS, 10-100m
+3. **UMi** (Urban Micro): Small cell urban, LoS/NLoS, 10-500m
+4. **UMa** (Urban Macro): Large cell urban, LoS/NLoS, 10-10000m
+5. **RMa** (Rural Macro): Extended range rural, LoS/NLoS, 10-10000m
 
 ### 2.4 Total Experimental Load
 

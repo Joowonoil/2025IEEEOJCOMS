@@ -84,11 +84,11 @@
 ### 2.3 시나리오
 
 모든 방법을 **5개 시나리오**에서 테스트:
-1. **InH** (Indoor Hotspot): 실내 밀집, LoS/NLoS
-2. **InF** (Indoor Factory): 실내 공장, LoS/NLoS
-3. **UMi** (Urban Micro): 소형 셀 도시, LoS/NLoS
-4. **UMa** (Urban Macro): 대형 셀 도시, LoS/NLoS
-5. **RMa** (Rural Macro): 확장 범위 농촌, LoS/NLoS
+1. **InH** (Indoor Hotspot): 실내 밀집, LoS/NLoS, 5-100m
+2. **InF** (Indoor Factory): 실내 공장, LoS/NLoS, 10-100m
+3. **UMi** (Urban Micro): 소형 셀 도시, LoS/NLoS, 10-500m
+4. **UMa** (Urban Macro): 대형 셀 도시, LoS/NLoS, 10-10000m
+5. **RMa** (Rural Macro): 확장 범위 농촌, LoS/NLoS, 10-10000m
 
 ### 2.4 총 실험 부하
 

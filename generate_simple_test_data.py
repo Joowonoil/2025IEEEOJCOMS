@@ -14,7 +14,10 @@ def generate_simple_test_data():
         'noise_spectral_density': -174.0,
         'subcarrier_spacing': 120.0,
         'transmit_power': 30.0,
-        'distance_range': [10.0, 100.0],  # 10-100m
+        'distance_ranges': {  # dict 형식으로!
+            'InF_Los': [10.0, 100.0],
+            'InF_Nlos': [10.0, 100.0]
+        },
         'carrier_freq': 28.0,
         'mod_order': 64,
         'ref_conf_dict': {'dmrs': [0, 3072, 6]},
@@ -32,23 +35,35 @@ def generate_simple_test_data():
 
     # RMa 테스트 데이터 설정 (Los + Nlos 섞음)
     rma_params = inf_params.copy()
-    rma_params['channel_type'] = ["RMa_Los", "RMa_Nlos"]  # Los와 Nlos 섞어서 사용
-    rma_params['distance_range'] = [10.0, 10000.0]  # 10-10000m
+    rma_params['channel_type'] = ["RMa_Los", "RMa_Nlos"]
+    rma_params['distance_ranges'] = {
+        'RMa_Los': [10.0, 10000.0],
+        'RMa_Nlos': [10.0, 10000.0]
+    }
 
     # InH 테스트 데이터 설정 (Los + Nlos 섞음)
     inh_params = inf_params.copy()
-    inh_params['channel_type'] = ["InH_Los", "InH_Nlos"]  # Los와 Nlos 섞어서 사용
-    inh_params['distance_range'] = [5.0, 100.0]  # 5-100m
+    inh_params['channel_type'] = ["InH_Los", "InH_Nlos"]
+    inh_params['distance_ranges'] = {
+        'InH_Los': [5.0, 100.0],
+        'InH_Nlos': [5.0, 100.0]
+    }
 
     # UMi 테스트 데이터 설정 (Los + Nlos 섞음)
     umi_params = inf_params.copy()
-    umi_params['channel_type'] = ["UMi_Los", "UMi_Nlos"]  # Los와 Nlos 섞어서 사용
-    umi_params['distance_range'] = [10.0, 500.0]  # 10-500m
+    umi_params['channel_type'] = ["UMi_Los", "UMi_Nlos"]
+    umi_params['distance_ranges'] = {
+        'UMi_Los': [10.0, 500.0],
+        'UMi_Nlos': [10.0, 500.0]
+    }
 
     # UMa 테스트 데이터 설정 (Los + Nlos 섞음)
     uma_params = inf_params.copy()
-    uma_params['channel_type'] = ["UMa_Los", "UMa_Nlos"]  # Los와 Nlos 섞어서 사용
-    uma_params['distance_range'] = [10.0, 10000.0]  # 10-10000m
+    uma_params['channel_type'] = ["UMa_Los", "UMa_Nlos"]
+    uma_params['distance_ranges'] = {
+        'UMa_Los': [10.0, 10000.0],
+        'UMa_Nlos': [10.0, 10000.0]
+    }
 
     # 데이터 생성 및 저장
     for dataset_name, params in [
@@ -67,7 +82,7 @@ def generate_simple_test_data():
         for batch_idx, data in enumerate(dataloader):
             if batch_idx == 0:  # 첫 번째 배치만
                 # 딕셔너리에서 데이터 추출
-                rx_signal = data['rx_signal']  # (batch, 14, 3072) - 복소수
+                rx_signal = data['ref_comp_rx_signal']  # (batch, 14, 3072) - 복소수, reference compensated!
                 ch_freq = data['ch_freq']  # (batch, 3072) - 복소수
 
                 # 복소수를 실수부/허수부로 분리하여 NumPy 배열로 변환
