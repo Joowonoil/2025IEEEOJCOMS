@@ -211,6 +211,162 @@ watch -n 1 nvidia-smi
 # Ctrl+C로 종료해도 실험은 계속 실행됨
 ```
 
+#### Step 10: 실행 중단 (필요 시)
+
+**실행 중인 프로세스 확인:**
+```bash
+ps aux | grep Transfer_Pareto
+# 또는 전체 Python 프로세스 확인
+ps aux | grep python
+```
+
+**특정 실험만 중단:**
+```bash
+# 안전한 종료 (현재 iteration 완료 후 종료, 권장)
+pkill -15 -f Transfer_Pareto_Adapter.py
+pkill -15 -f Transfer_Pareto_LoRA.py
+pkill -15 -f Transfer_Pareto_Prompt.py
+pkill -15 -f Transfer_Pareto_Hybrid.py
+
+# 강제 종료 (즉시 중단, checkpoint 손상 위험)
+pkill -9 -f Transfer_Pareto_Adapter.py
+```
+
+**모든 Pareto 실험 한번에 중단:**
+```bash
+# 안전한 종료 (권장)
+pkill -15 -f Transfer_Pareto
+
+# 강제 종료
+pkill -9 -f Transfer_Pareto
+```
+
+**PID로 직접 종료:**
+```bash
+# PID 확인
+ps aux | grep Transfer_Pareto
+# 출력 예: root  12345 ... python Transfer_Pareto_Adapter.py
+
+# 안전한 종료
+kill -15 12345
+
+# 강제 종료 (응답 없을 때)
+kill -9 12345
+```
+
+**중단 후 확인:**
+```bash
+# 프로세스가 완전히 종료되었는지 확인
+ps aux | grep Transfer_Pareto
+
+# GPU 메모리 해제 확인
+nvidia-smi
+
+# 로그 마지막 줄 확인
+tail -20 adapter.log
+```
+
+**주의사항:**
+- `-15` (SIGTERM): 안전한 종료, checkpoint 저장 시간 부여
+- `-9` (SIGKILL): 강제 종료, 파일 손상 가능성 있음
+- nohup으로 실행했어도 `pkill` 또는 `kill`로 종료 가능
+- 중단 후 재시작하려면 같은 명령으로 다시 실행
+
+#### Step 11: 코드 업데이트 (GitHub Pull)
+
+**상황:** 실험 중에 버그 수정이나 코드 업데이트가 있을 때
+
+**안전한 업데이트 절차:**
+
+1. **현재 실행 중인 실험 중단**
+```bash
+# 안전한 종료
+pkill -15 -f Transfer_Pareto
+
+# 프로세스 종료 확인
+ps aux | grep Transfer_Pareto
+```
+
+2. **현재 변경사항 확인**
+```bash
+cd /workspace/2025IEEEOJCOMS
+
+# 변경된 파일 확인
+git status
+
+# 로컬 변경사항이 있다면 확인
+git diff
+```
+
+3. **최신 코드 Pull**
+```bash
+# 로컬 변경사항 없으면 바로 pull
+git pull origin main
+
+# 로컬 변경사항이 있으면 stash 후 pull
+git stash              # 로컬 변경사항을 임시 저장소에 보관
+git pull origin main   # 최신 코드 받기
+git stash pop          # 임시 저장했던 변경사항 다시 적용 (필요시)
+```
+
+**💡 Git Stash란?**
+- **stash**: 현재 작업 중인 변경사항을 임시로 "서랍"에 보관
+- **stash pop**: 서랍에서 꺼내서 다시 적용
+- 예: config 파일을 살짝 수정했는데 pull 해야 할 때 유용
+
+```bash
+# stash 관련 유용한 명령어
+git stash list         # 저장된 stash 목록 보기
+git stash drop         # 가장 최근 stash 삭제 (적용 안하고 버림)
+git stash clear        # 모든 stash 삭제
+```
+
+4. **변경사항 확인**
+```bash
+# 최근 커밋 확인
+git log -3 --oneline
+
+# 특정 파일 변경사항 확인
+git show HEAD:Transfer_Pareto_LoRA.py
+```
+
+5. **필요시 패키지 재설치**
+```bash
+# requirements가 변경되었다면
+pip install -r requirements_vastai.txt --upgrade
+```
+
+6. **실험 재시작**
+```bash
+# 같은 명령으로 재실행
+nohup python Transfer_Pareto_Adapter.py > adapter.log 2>&1 &
+nohup python Transfer_Pareto_LoRA.py > lora.log 2>&1 &
+# ...
+
+# 로그 확인
+tail -f adapter.log
+```
+
+**주의사항:**
+- 실험 중단 없이 pull하면 코드 충돌 가능
+- checkpoint는 유지되므로 중단했던 지점부터 재시작됨
+- config 파일이 변경되었다면 기존 실험과 비교 불가능할 수 있음
+
+**자주 쓰는 명령:**
+```bash
+# 원격 저장소 최신 상태 확인 (pull 없이)
+git fetch origin
+git log HEAD..origin/main --oneline
+
+# 특정 브랜치로 변경
+git checkout <branch-name>
+git pull origin <branch-name>
+
+# 강제로 원격 저장소 상태로 되돌리기 (로컬 변경 무시)
+git fetch origin
+git reset --hard origin/main
+```
+
 ---
 
 ## 🔍 모니터링
@@ -242,24 +398,154 @@ nvidia-smi
 
 ## 📥 결과 수집
 
-### 각 인스턴스에서:
+학습이 완료되면 Vast.ai에서 로컬로 모델 파일을 다운받아야 합니다.
+
+### 방법 1: 터미널 압축 + Jupyter Lab 다운로드 (가장 빠름, 권장!)
+
+**1단계: SSH 터미널에서 압축**
 ```bash
 cd /workspace/2025IEEEOJCOMS
 
-# 결과 압축
+# 전체 결과 압축 (600개 파일)
+tar -czf pareto_all_results.tar.gz saved_model/pareto/
+
+# 또는 method별로 분리 압축 (각 인스턴스에 맞게)
 tar -czf pareto_adapter_results.tar.gz saved_model/pareto/*adapter*
-# (또는 lora, prompt, hybrid)
+tar -czf pareto_lora_results.tar.gz saved_model/pareto/*lora*
+tar -czf pareto_prompt_results.tar.gz saved_model/pareto/*prompt*
+tar -czf pareto_hybrid_results.tar.gz saved_model/pareto/*hybrid*
+
+# 압축 파일 크기 확인
+ls -lh *.tar.gz
 ```
 
-### 로컬로 다운로드:
-```bash
-# 로컬 터미널
-scp -P PORT root@IP:/workspace/2025IEEEOJCOMS/pareto_adapter_results.tar.gz .
+**2단계: Jupyter Lab에서 압축 파일 다운로드**
+1. Vast.ai → **Jupyter Lab** 열기
+2. 좌측 파일 브라우저에서 `pareto_all_results.tar.gz` 파일 찾기
+3. **파일 우클릭** → **Download**
+4. 빠르게 다운로드 완료!
+
+**3단계: 로컬에서 압축 해제**
+```powershell
+# Windows PowerShell
+cd C:\Users\Ramster\Documents\Files\SKKU\Project\DNN_channel_estimation_training
+tar -xzf pareto_all_results.tar.gz
 ```
 
-### 압축 해제:
+**장점:**
+- ✅ 터미널에서 압축은 빠르고 진행률 확인 가능
+- ✅ Jupyter Lab 자동 압축보다 훨씬 빠름 (600개 파일 처리)
+- ✅ GUI 다운로드로 간편함
+
+**주의:**
+- ❌ Jupyter Lab의 "Download as Archive" 기능은 매우 느림 (사용하지 마세요!)
+
+---
+
+### 방법 2: 개별 파일 다운로드 (특정 파일만)
+
+**특정 파일 몇 개만 확인하고 싶을 때:**
+1. Jupyter Lab → `saved_model/pareto/` 폴더로 이동
+2. 다운받고 싶은 `.pt` 파일 **우클릭** → **Download**
+3. 여러 파일 선택: **Ctrl+클릭**으로 선택 → 우클릭 → Download
+
+**용도:**
+- 중간 checkpoint 확인
+- 특정 실험 결과만 빠르게 확인
+
+---
+
+### 방법 3: SCP (터미널, 대용량)
+
+**1단계: 인스턴스에서 결과 압축**
 ```bash
-tar -xzf pareto_adapter_results.tar.gz -C saved_model/pareto/
+cd /workspace/2025IEEEOJCOMS
+
+# 특정 method만 압축
+tar -czf pareto_adapter_results.tar.gz saved_model/pareto/*adapter*
+tar -czf pareto_lora_results.tar.gz saved_model/pareto/*lora*
+tar -czf pareto_prompt_results.tar.gz saved_model/pareto/*prompt*
+tar -czf pareto_hybrid_results.tar.gz saved_model/pareto/*hybrid*
+
+# 또는 모두 한번에
+tar -czf pareto_all_results.tar.gz saved_model/pareto/
+
+# 압축 파일 크기 확인
+ls -lh *.tar.gz
+```
+
+**2단계: 로컬(Windows)에서 다운로드**
+```powershell
+# Windows PowerShell
+cd C:\Users\Ramster\Documents\Files\SKKU\Project\DNN_channel_estimation_training
+
+# SCP로 다운로드 (Vast.ai SSH 정보 사용)
+scp -P 12345 root@123.456.78.90:/workspace/2025IEEEOJCOMS/pareto_adapter_results.tar.gz .
+```
+
+**3단계: 압축 해제**
+```powershell
+# Windows
+tar -xzf pareto_adapter_results.tar.gz
+```
+
+**장점:**
+- 대용량 파일도 안정적
+- 명령어로 자동화 가능
+
+**단점:**
+- 터미널 명령어 필요
+
+---
+
+### 방법 4: rsync (중단/재개 가능)
+
+```bash
+# Windows에서 WSL 또는 Git Bash 사용
+rsync -avz -e "ssh -p 12345" \
+  root@123.456.78.90:/workspace/2025IEEEOJCOMS/saved_model/pareto/ \
+  ./saved_model/pareto/
+```
+
+**장점:**
+- 다운로드 중단되어도 이어받기 가능
+- 이미 다운받은 파일은 건너뜀 (효율적)
+
+**단점:**
+- Windows에서 rsync 설정 필요
+
+---
+
+### 💡 10개 인스턴스 결과 수집 팁
+
+**방법 A: 터미널 압축 + Jupyter Lab 다운로드 (권장)**
+1. 각 인스턴스 SSH 터미널 접속
+2. 다른 이름으로 압축:
+```bash
+# Set A
+tar -czf pareto_set_a_adapter.tar.gz saved_model/pareto/
+
+# Set B
+tar -czf pareto_set_b_adapter.tar.gz saved_model/pareto/
+
+# Extra A
+tar -czf pareto_extra_a_hybrid.tar.gz saved_model/pareto/
+# ...
+```
+3. Jupyter Lab에서 각 `.tar.gz` 파일 우클릭 → Download
+4. 로컬에서 각각 압축 해제
+
+**방법 B: SCP (스크립트화)**
+```bash
+# 각 인스턴스마다 다른 이름으로 압축
+tar -czf pareto_set_a_adapter.tar.gz saved_model/pareto/
+tar -czf pareto_set_b_lora.tar.gz saved_model/pareto/
+# ...
+
+# 로컬에서 순차 다운로드
+scp -P 12345 root@IP1:/workspace/.../pareto_set_a_adapter.tar.gz .
+scp -P 23456 root@IP2:/workspace/.../pareto_set_b_lora.tar.gz .
+# ...
 ```
 
 ---
