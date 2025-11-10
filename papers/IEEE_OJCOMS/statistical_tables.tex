@@ -1,0 +1,42 @@
+% Statistical Tables for IEEE OJCOMS Paper
+
+\begin{table}[htbp]
+\centering
+\caption{In-domain Performance Comparison (n=5)}
+\label{tab:indomain_stats}
+\begin{tabular}{llccccc}
+\toprule
+Scenario & Method & Config & NMSE (dB) & vs Base (dB) & Params & Param \% \\
+\midrule
+InF & Base & - & $-19.34 \pm 0.00$ & - & 0 & 0.00\% \\
+InF & Adapter & dim8 & $-19.74 \pm 0.21$ & $-0.40$ & 65,536 & 4.83\% \\
+InF & LoRA & r4 & $-19.32 \pm 0.13$ & $+0.02$ & 19,660 & 1.45\% \\
+InF & Prompt & len200 & $-19.40 \pm 0.19$ & $-0.06$ & 25,600 & 1.89\% \\
+InF & Hybrid & p25_r2 & $-19.34 \pm 0.14$ & $-0.00$ & 12,752 & 0.94\% \\
+\midrule
+InH & Base & - & $-19.32 \pm 0.00$ & - & 0 & 0.00\% \\
+InH & Adapter & dim8 & $-19.80 \pm 0.19$ & $-0.48$ & 65,536 & 4.83\% \\
+InH & LoRA & r4 & $-19.44 \pm 0.23$ & $-0.12$ & 19,660 & 1.45\% \\
+InH & Prompt & len50 & $-19.29 \pm 0.21$ & $+0.03$ & 6,400 & 0.47\% \\
+InH & Hybrid & p25_r2 & $-19.41 \pm 0.22$ & $-0.09$ & 12,752 & 0.94\% \\
+\midrule
+UMi & Base & - & $-18.68 \pm 0.00$ & - & 0 & 0.00\% \\
+UMi & Adapter & dim8 & $-19.53 \pm 1.10$ & $-0.85$ & 65,536 & 4.83\% \\
+UMi & LoRA & r4 & $-18.88 \pm 0.88$ & $-0.21$ & 19,660 & 1.45\% \\
+UMi & Prompt & len200 & $-18.89 \pm 0.94$ & $-0.22$ & 25,600 & 1.89\% \\
+UMi & Hybrid & p75_r8 & $-18.92 \pm 0.91$ & $-0.24$ & 48,896 & 3.61\% \\
+\midrule
+UMa & Base & - & $-14.75 \pm 0.00$ & - & 0 & 0.00\% \\
+UMa & Adapter & dim64 & $-15.20 \pm 4.03$ & $-0.45$ & 524,288 & 38.66\% \\
+UMa & LoRA & r8 & $-14.94 \pm 3.85$ & $-0.19$ & 39,320 & 2.90\% \\
+UMa & Prompt & len200 & $-15.38 \pm 4.25$ & $-0.63$ & 25,600 & 1.89\% \\
+UMa & Hybrid & p300_r25 & $-14.97 \pm 3.86$ & $-0.22$ & 161,280 & 11.89\% \\
+\midrule
+RMa & Base & - & $-16.96 \pm 0.00$ & - & 0 & 0.00\% \\
+RMa & Adapter & dim64 & $-19.27 \pm 4.05$ & $-2.30$ & 524,288 & 38.66\% \\
+RMa & LoRA & r20 & $-18.65 \pm 3.53$ & $-1.69$ & 98,304 & 7.25\% \\
+RMa & Prompt & len200 & $-17.90 \pm 3.40$ & $-0.93$ & 25,600 & 1.89\% \\
+RMa & Hybrid & p100_r5 & $-19.29 \pm 4.21$ & $-2.33$ & 36,630 & 2.70\% \\
+\bottomrule
+\end{tabular}
+\end{table}

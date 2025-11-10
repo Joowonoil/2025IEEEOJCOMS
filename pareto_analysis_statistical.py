@@ -2,9 +2,11 @@
 Pareto Analysis with Statistical Validation
 
 다중 테스트 셋 (5 seeds)을 사용하여 통계적으로 엄밀한 분석 수행
+- CSV 있으면 로드, 없으면 모델 평가 수행
 - 평균 (mean), 표준편차 (std) 계산
 - t-test로 통계적 유의성 검정
-- Error bars 포함 그래프 생성
+- Clean 그래프 5개 생성 (error bars 제거, 평균값만 사용)
+- 통계 테이블 생성 (Markdown & LaTeX)
 """
 
 import torch
@@ -178,6 +180,28 @@ class StatisticalParetoAnalyzer:
         except Exception as e:
             print(f"[WARNING] Failed to parse {filename}: {e}")
 
+    def load_csv_results(self):
+        """CSV 파일에서 통계 결과 로드 (원본 값 포함)"""
+        csv_path = Path(__file__).parent / 'pareto_statistical_results.csv'
+
+        if not csv_path.exists():
+            return None
+
+        print(f"\n[OK] Found existing CSV: {csv_path}")
+        df = pd.read_csv(csv_path)
+        print(f"[OK] Loaded {len(df)} results from CSV")
+
+        # DataFrame을 딕셔너리 리스트로 변환
+        results = df.to_dict('records')
+
+        # nmse_values를 JSON에서 리스트로 변환
+        import json
+        for r in results:
+            if 'nmse_values' in r and isinstance(r['nmse_values'], str):
+                r['nmse_values'] = json.loads(r['nmse_values'])
+
+        return results
+
     def run_statistical_analysis(self):
         """전체 통계 분석 실행"""
         print("\n" + "="*70)
@@ -185,6 +209,19 @@ class StatisticalParetoAnalyzer:
         print("="*70)
         print(f"Number of seeds per scenario: {self.num_seeds}")
         print("="*70)
+
+        # CSV가 이미 있으면 로드
+        results = self.load_csv_results()
+        if results is not None:
+            print("[OK] Using existing CSV data")
+            # 통계적 유의성 검정
+            self.perform_statistical_tests(results)
+            # Clean 그래프 생성
+            self.plot_clean_graphs(results)
+            return results
+
+        # CSV가 없으면 모델 평가 수행
+        print("[INFO] CSV not found. Starting model evaluation...")
 
         # 모델 찾기
         models_info = self.find_pareto_models()
@@ -295,21 +332,25 @@ class StatisticalParetoAnalyzer:
         # 통계적 유의성 검정
         self.perform_statistical_tests(results)
 
-        # 시각화 (error bars 포함)
-        self.plot_statistical_analysis(results)
+        # Clean 그래프 생성
+        self.plot_clean_graphs(results)
 
         return results
 
     def save_statistical_results(self, results):
-        """통계 결과를 CSV로 저장"""
+        """통계 결과를 CSV로 저장 (원본 값 포함)"""
         csv_path = Path(__file__).parent / 'pareto_statistical_results.csv'
 
         with open(csv_path, 'w') as f:
-            f.write('model_name,method,train_env,test_env,config,params,nmse_mean,nmse_std,n_seeds\n')
+            f.write('model_name,method,train_env,test_env,config,params,nmse_mean,nmse_std,n_seeds,nmse_values\n')
             for r in results:
+                # nmse_values를 JSON 형식으로 저장
+                import json
+                values_str = json.dumps(r['nmse_values'])
+
                 f.write(f"{r['model_name']},{r['method']},{r['train_env']},{r['test_env']},"
                        f"{r['config']},{r['params']},{r['nmse_mean']:.4f},{r['nmse_std']:.4f},"
-                       f"{r['n_seeds']}\n")
+                       f"{r['n_seeds']},\"{values_str}\"\n")
 
         print(f"\n[OK] Statistical results saved to {csv_path}")
 
@@ -372,18 +413,252 @@ class StatisticalParetoAnalyzer:
         print("Significance: *** p<0.001, ** p<0.01, * p<0.05, n.s. not significant")
         print("="*70)
 
-    def plot_statistical_analysis(self, results):
-        """Error bars 포함 그래프 생성"""
-        print("\n[1/2] Generating in-domain comparison with error bars...")
-        self.plot_indomain_with_errorbars(results)
+    def plot_clean_graphs(self, results):
+        """Clean 그래프 5개 생성 (error bars 제거)"""
+        print("\n" + "="*70)
+        print("Generating Clean Graphs (평균값만, error bars 제거)")
+        print("="*70)
 
-        print("[2/2] Generating Pareto curves with confidence bands...")
-        self.plot_pareto_with_confidence(results)
+        print("[1/5] Generating heatmap...")
+        self.plot_heatmap(results)
 
-    def plot_indomain_with_errorbars(self, results):
-        """In-domain 성능 비교 (error bars 포함)"""
+        print("[2/5] Generating in-domain parameter comparison...")
+        self.plot_indomain_parameter_comparison(results)
+
+        print("[3/5] Generating domain-wise in-domain comparison...")
+        self.plot_domain_indomain(results)
+
+        print("[4/5] Generating domain-wise cross-environment comparison...")
+        self.plot_domain_crossenv(results)
+
+        print("[5/5] Generating Pareto curves...")
+        self.plot_pareto_curves(results)
+
+        print("\n[BONUS] Generating statistical tables...")
+        self.generate_statistical_tables(results)
+
+    def plot_heatmap(self, results):
+        """Heatmap: Cross-environment performance"""
+        # Base 성능
+        base_performance = {}
+        for test_env in self.scenarios:
+            base_nmse = next((r['nmse_mean'] for r in results
+                             if r['method'] == 'Base' and r['test_env'] == test_env), None)
+            base_performance[test_env] = base_nmse
+
+        # PEFT 모델만
+        peft_results = [r for r in results if r['method'] != 'Base']
+
+        # 모델 정보 수집
+        model_info_list = []
+        for r in peft_results:
+            model_name = r['model_name']
+            if not any(m['model_name'] == model_name for m in model_info_list):
+                model_info_list.append({
+                    'model_name': model_name,
+                    'method': r['method'],
+                    'params': r['params']
+                })
+
+        # 정렬: 방법별 → 파라미터 → train_env
+        method_order = ['Adapter', 'LoRA', 'Prompt', 'Hybrid']
+        sorted_models = []
+
+        for method in method_order:
+            method_models = [m for m in model_info_list if m['method'] == method]
+
+            # train_env 추출
+            for model in method_models:
+                parts = model['model_name'].split('_')
+                model['train_env'] = parts[1] if len(parts) >= 2 else 'ZZZ'
+
+            # 정렬: params → train_env
+            method_models.sort(key=lambda x: (
+                x['params'],
+                self.scenarios.index(x['train_env']) if x['train_env'] in self.scenarios else 999
+            ))
+
+            sorted_models.extend(method_models)
+
+        models = [m['model_name'] for m in sorted_models]
+        test_envs = self.scenarios
+
+        # 개선도 데이터 생성
+        improvement_data = []
+        actual_nmse_data = []
+        display_labels = []
+
+        for model_info in sorted_models:
+            model = model_info['model_name']
+            method = model_info['method']
+            params = model_info['params']
+
+            # Y축 레이블
+            params_k = params / 1000
+            if params_k < 1000:
+                params_str = f"{params_k:.0f}K"
+            else:
+                params_str = f"{params_k/1000:.1f}M"
+
+            display_label = f"[{method}-{params_str}] {model.replace(method+'_', '')}"
+            display_labels.append(display_label)
+
+            improvement_row = []
+            actual_row = []
+            for test_env in test_envs:
+                # PEFT 평균 NMSE
+                peft_nmse = next((r['nmse_mean'] for r in peft_results
+                                 if r['model_name'] == model and r['test_env'] == test_env), None)
+                base_nmse = base_performance.get(test_env)
+
+                if peft_nmse is not None and base_nmse is not None:
+                    improvement = peft_nmse - base_nmse
+                    improvement_row.append(improvement)
+                    actual_row.append(peft_nmse)
+                else:
+                    improvement_row.append(np.nan)
+                    actual_row.append(np.nan)
+
+            improvement_data.append(improvement_row)
+            actual_nmse_data.append(actual_row)
+
+        # DataFrame
+        improvement_df = pd.DataFrame(improvement_data, index=display_labels, columns=test_envs)
+        actual_nmse_df = pd.DataFrame(actual_nmse_data, index=display_labels, columns=test_envs)
+
+        # Annotation: "improvement\n(actual_nmse)"
+        annot_labels = []
+        for i in range(len(display_labels)):
+            row_labels = []
+            for j in range(len(test_envs)):
+                improvement = improvement_df.iloc[i, j]
+                actual_nmse = actual_nmse_df.iloc[i, j]
+                if not np.isnan(improvement) and not np.isnan(actual_nmse):
+                    row_labels.append(f"{improvement:+.2f}\n({actual_nmse:.2f})")
+                else:
+                    row_labels.append("")
+            annot_labels.append(row_labels)
+        annot_labels = np.array(annot_labels)
+
+        # Heatmap
+        fig, ax = plt.subplots(figsize=(14, max(20, len(display_labels) * 0.35)))
+
+        sns.heatmap(improvement_df,
+                   annot=annot_labels,
+                   fmt='',
+                   cmap='RdYlGn_r',
+                   center=0,
+                   vmin=-2,
+                   vmax=2,
+                   linewidths=0.5,
+                   linecolor='gray',
+                   cbar_kws={'label': 'Improvement vs Base (dB)', 'shrink': 0.8},
+                   ax=ax,
+                   annot_kws={'fontsize': 6.5})
+
+        ax.set_title('PEFT Performance Improvement vs Base Model\n'
+                    '(Top: Improvement | Bottom: Actual NMSE in dB)\n'
+                    'Grouped by Method and Sorted by Parameter Count',
+                    fontsize=16, fontweight='bold', pad=20)
+        ax.set_xlabel('Test Environment', fontsize=13, fontweight='bold')
+        ax.set_ylabel('PEFT Model Configuration', fontsize=13, fontweight='bold')
+        ax.set_yticklabels(ax.get_yticklabels(), rotation=0, ha='right', fontsize=7)
+
+        plt.tight_layout()
+        save_path = Path(__file__).parent / 'pareto_heatmap_statistical.png'
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"[OK] Saved {save_path}")
+        plt.close()
+
+    def plot_indomain_parameter_comparison(self, results):
+        """In-domain parameter size effect (2x2)"""
         methods = ['Adapter', 'LoRA', 'Prompt', 'Hybrid']
         base_total_params = 1_356_000
+
+        # Base 성능
+        base_performance = {}
+        for test_env in self.scenarios:
+            base_nmse = next((r['nmse_mean'] for r in results
+                             if r['method'] == 'Base' and r['test_env'] == test_env), None)
+            base_performance[test_env] = base_nmse
+
+        fig, axes = plt.subplots(2, 2, figsize=(20, 14))
+        axes = axes.flatten()
+
+        param_colors = ['#4CAF50', '#2196F3', '#FF9800', '#F44336']
+
+        for idx, method in enumerate(methods):
+            ax = axes[idx]
+
+            # In-domain 결과
+            method_results = [r for r in results
+                            if r['method'] == method and r['train_env'] == r['test_env']]
+
+            if not method_results:
+                ax.set_title(f'{method} - No Data', fontsize=15, fontweight='bold')
+                continue
+
+            # Config 목록 (파라미터 순)
+            configs = sorted(set(r['config'] for r in method_results),
+                           key=lambda c: next((r['params'] for r in method_results if r['config'] == c), 0))
+
+            x = np.arange(len(self.scenarios))
+            width = 0.8 / len(configs)
+
+            for config_idx, config in enumerate(configs):
+                improvements = []
+
+                for test_env in self.scenarios:
+                    base_nmse = base_performance.get(test_env, 0)
+                    matching = [r for r in method_results
+                               if r['test_env'] == test_env and r['config'] == config]
+
+                    if matching:
+                        nmse = matching[0]['nmse_mean']
+                        improvements.append(nmse - base_nmse)
+                    else:
+                        improvements.append(np.nan)
+
+                offset = (config_idx - len(configs)/2 + 0.5) * width
+                ax.bar(x + offset, improvements, width,
+                      label=config,
+                      color=param_colors[config_idx % len(param_colors)],
+                      alpha=0.85,
+                      edgecolor='black',
+                      linewidth=0.8)
+
+            ax.axhline(y=0, color='black', linestyle='--', linewidth=2, alpha=0.8)
+            ax.set_xlabel('Scenario (In-domain)', fontsize=13, fontweight='bold')
+            ax.set_ylabel('Improvement vs Base (dB)', fontsize=13, fontweight='bold')
+            ax.set_title(f'{method}: Parameter Size Effect\n(Negative = Better)',
+                        fontsize=14, fontweight='bold', pad=15)
+            ax.set_xticks(x)
+            ax.set_xticklabels(self.scenarios, fontsize=12)
+            ax.legend(fontsize=10, loc='best', framealpha=0.95, edgecolor='black',
+                     title='Config', title_fontsize=11)
+            ax.grid(True, axis='y', alpha=0.3, linestyle='--')
+            ax.set_ylim(-2.5, 2.5)
+
+        plt.suptitle('In-domain Performance: Parameter Configuration Comparison\n'
+                    '(Train and test on same scenario)',
+                    fontsize=16, fontweight='bold')
+        plt.tight_layout()
+
+        save_path = Path(__file__).parent / 'pareto_parameter_comparison_statistical.png'
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"[OK] Saved {save_path}")
+        plt.close()
+
+    def plot_domain_indomain(self, results):
+        """Domain-wise in-domain comparison (1x5)"""
+        methods = ['Adapter', 'LoRA', 'Prompt', 'Hybrid']
+        base_total_params = 1_356_000
+
+        base_performance = {}
+        for test_env in self.scenarios:
+            base_nmse = next((r['nmse_mean'] for r in results
+                             if r['method'] == 'Base' and r['test_env'] == test_env), None)
+            base_performance[test_env] = base_nmse
 
         fig, axes = plt.subplots(1, 5, figsize=(25, 5))
 
@@ -397,22 +672,14 @@ class StatisticalParetoAnalyzer:
         for idx, test_env in enumerate(self.scenarios):
             ax = axes[idx]
 
-            # Base 성능
-            base_result = next((r for r in results
-                               if r['method'] == 'Base' and r['test_env'] == test_env), None)
-            if not base_result:
-                continue
-
-            base_mean = base_result['nmse_mean']
-
             improvements = []
-            errors = []
             param_ratios = []
             labels = []
             colors = []
 
+            base_nmse = base_performance.get(test_env, 0)
+
             for method in methods:
-                # In-domain: train_env == test_env
                 in_domain = [r for r in results
                             if r['method'] == method
                             and r['train_env'] == test_env
@@ -420,25 +687,20 @@ class StatisticalParetoAnalyzer:
 
                 if in_domain:
                     best = min(in_domain, key=lambda x: x['nmse_mean'])
-                    improvement = best['nmse_mean'] - base_mean
+                    improvement = best['nmse_mean'] - base_nmse
                     param_ratio = (best['params'] / base_total_params) * 100
-
                     improvements.append(improvement)
-                    errors.append(best['nmse_std'])
                     param_ratios.append(param_ratio)
                 else:
                     improvements.append(0)
-                    errors.append(0)
                     param_ratios.append(0)
 
                 labels.append(method)
                 colors.append(method_colors[method])
 
-            # 막대 그래프 with error bars
             x = np.arange(len(methods))
             bars = ax.bar(x, improvements, color=colors, alpha=0.85,
-                         edgecolor='black', linewidth=1.5,
-                         yerr=errors, capsize=5, error_kw={'linewidth': 2})
+                         edgecolor='black', linewidth=1.5)
 
             # 파라미터 비율 표시
             for i, (bar, ratio) in enumerate(zip(bars, param_ratios)):
@@ -450,31 +712,110 @@ class StatisticalParetoAnalyzer:
                            ha='center', va='bottom' if height >= 0 else 'top',
                            fontsize=9, fontweight='bold', color='black')
 
-            # 0선 강조
             ax.axhline(y=0, color='black', linestyle='--', linewidth=2, alpha=0.8)
-
             ax.set_xlabel('PEFT Method', fontsize=12, fontweight='bold')
             ax.set_ylabel('Improvement vs Base (dB)', fontsize=12, fontweight='bold')
-            ax.set_title(f'{test_env}\n(In-domain, n={self.num_seeds})',
-                        fontsize=14, fontweight='bold', pad=10)
+            ax.set_title(f'{test_env}\n(In-domain)', fontsize=14, fontweight='bold', pad=10)
             ax.set_xticks(x)
             ax.set_xticklabels(labels, fontsize=11)
             ax.grid(True, axis='y', alpha=0.3, linestyle='--')
             ax.set_ylim(-2.5, 2.5)
 
-        plt.suptitle('In-domain Performance with Statistical Error Bars\n'
-                    '(Best configuration per method | Error bars = ±1 std)',
+        plt.suptitle('In-domain Performance Comparison by Scenario\n'
+                    '(Best configuration per method | Negative = Better)',
                     fontsize=16, fontweight='bold')
         plt.tight_layout()
 
-        save_path = Path(__file__).parent / 'pareto_indomain_statistical.png'
+        save_path = Path(__file__).parent / 'pareto_domain_indomain_statistical.png'
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"[OK] Saved {save_path}")
         plt.close()
 
-    def plot_pareto_with_confidence(self, results):
-        """Pareto curves with confidence bands"""
+    def plot_domain_crossenv(self, results):
+        """Domain-wise cross-environment comparison (2x3)"""
+        methods = ['Adapter', 'LoRA', 'Prompt', 'Hybrid']
         base_total_params = 1_356_000
+
+        base_performance = {}
+        for test_env in self.scenarios:
+            base_nmse = next((r['nmse_mean'] for r in results
+                             if r['method'] == 'Base' and r['test_env'] == test_env), None)
+            base_performance[test_env] = base_nmse
+
+        fig, axes = plt.subplots(2, 3, figsize=(24, 14))
+        axes = axes.flatten()
+
+        train_colors = {
+            'InF': '#2196F3',
+            'InH': '#4CAF50',
+            'UMi': '#FF9800',
+            'UMa': '#9C27B0',
+            'RMa': '#F44336'
+        }
+
+        for idx, test_env in enumerate(self.scenarios):
+            ax = axes[idx]
+            base_nmse = base_performance.get(test_env, 0)
+
+            x_positions = np.arange(len(methods))
+            width = 0.15
+
+            for train_idx, train_env in enumerate(self.scenarios):
+                improvements = []
+
+                for method in methods:
+                    matching = [r for r in results
+                               if r['method'] == method
+                               and r['train_env'] == train_env
+                               and r['test_env'] == test_env]
+
+                    if matching:
+                        best_nmse = min(r['nmse_mean'] for r in matching)
+                        improvement = best_nmse - base_nmse
+                        improvements.append(improvement)
+                    else:
+                        improvements.append(np.nan)
+
+                offset = (train_idx - 2) * width
+                ax.bar(x_positions + offset, improvements, width,
+                      label=f'Train: {train_env}',
+                      color=train_colors[train_env],
+                      alpha=0.85,
+                      edgecolor='black',
+                      linewidth=0.8)
+
+            ax.axhline(y=0, color='black', linestyle='--', linewidth=2, alpha=0.8)
+            ax.set_xlabel('PEFT Method', fontsize=12, fontweight='bold')
+            ax.set_ylabel('Improvement vs Base (dB)', fontsize=12, fontweight='bold')
+            ax.set_title(f'Test on {test_env}\n(All training scenarios)',
+                        fontsize=14, fontweight='bold', pad=10)
+            ax.set_xticks(x_positions)
+            ax.set_xticklabels(methods, fontsize=11)
+            ax.legend(fontsize=9, loc='best', framealpha=0.95, edgecolor='black')
+            ax.grid(True, axis='y', alpha=0.3, linestyle='--')
+            ax.set_ylim(-2.5, 2.5)
+
+        fig.delaxes(axes[5])
+
+        plt.suptitle('Cross-environment Performance Comparison by Test Scenario\n'
+                    '(Best configuration per method | Negative = Better)',
+                    fontsize=16, fontweight='bold')
+        plt.tight_layout()
+
+        save_path = Path(__file__).parent / 'pareto_domain_crossenv_statistical.png'
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"[OK] Saved {save_path}")
+        plt.close()
+
+    def plot_pareto_curves(self, results):
+        """Pareto curves (2x3)"""
+        base_total_params = 1_356_000
+
+        base_performance = {}
+        for test_env in self.scenarios:
+            base_nmse = next((r['nmse_mean'] for r in results
+                             if r['method'] == 'Base' and r['test_env'] == test_env), None)
+            base_performance[test_env] = base_nmse
 
         fig, axes = plt.subplots(2, 3, figsize=(24, 14))
         axes = axes.flatten()
@@ -496,7 +837,6 @@ class StatisticalParetoAnalyzer:
         for idx, scenario in enumerate(self.scenarios):
             ax = axes[idx]
 
-            # Base 성능
             base_result = next((r for r in results
                                if r['method'] == 'Base' and r['test_env'] == scenario), None)
             if not base_result:
@@ -505,7 +845,6 @@ class StatisticalParetoAnalyzer:
             base_mean = base_result['nmse_mean']
 
             for method in ['Adapter', 'LoRA', 'Prompt', 'Hybrid']:
-                # In-domain: train_env == test_env == scenario
                 scenario_results = [r for r in results
                                    if r['method'] == method
                                    and r['train_env'] == scenario
@@ -513,44 +852,28 @@ class StatisticalParetoAnalyzer:
                 scenario_results.sort(key=lambda x: x['params'])
 
                 if scenario_results:
-                    # X: 파라미터 비율
-                    param_ratios = [(r['params'] / base_total_params) * 100 for r in scenario_results]
-
-                    # Y: 개선도
+                    param_ratios = [(r['params'] / base_total_params) * 100
+                                   for r in scenario_results]
                     improvements = [r['nmse_mean'] - base_mean for r in scenario_results]
-                    stds = [r['nmse_std'] for r in scenario_results]
 
-                    # Confidence band (±1 std)
-                    improvements = np.array(improvements)
-                    stds = np.array(stds)
-                    upper = improvements + stds
-                    lower = improvements - stds
-
-                    # Plot line with confidence band
                     ax.plot(param_ratios, improvements,
                            marker=markers[method], color=colors[method],
                            label=method, linewidth=2.5, markersize=10, alpha=0.85)
 
-                    ax.fill_between(param_ratios, lower, upper,
-                                   color=colors[method], alpha=0.2)
-
-            # Base 기준선
             ax.axhline(y=0, color='black', linestyle='--', linewidth=2, alpha=0.7, label='Base')
-
             ax.set_xlabel('Trainable Parameter Ratio (%)', fontsize=13, fontweight='bold')
             ax.set_ylabel('Improvement vs Base (dB)', fontsize=13, fontweight='bold')
-            ax.set_title(f'{scenario} (In-Domain, n={self.num_seeds})\nBase: {base_mean:.2f} dB',
+            ax.set_title(f'{scenario} Scenario (In-Domain)\nBase NMSE: {base_mean:.2f} dB',
                         fontsize=14, fontweight='bold')
             ax.set_xscale('log')
             ax.grid(True, alpha=0.4, linestyle='--')
             ax.legend(loc='best', fontsize=10, framealpha=0.9)
             ax.set_xlim(0.1, 50)
 
-        # 마지막 subplot 제거
         fig.delaxes(axes[5])
 
-        plt.suptitle('Pareto Frontier with Confidence Bands\n'
-                    '(Shaded area = ±1 std | Negative = Better)',
+        plt.suptitle('Pareto Frontier: Parameter Efficiency vs Performance\n'
+                    '(Negative = Better than Base | Log scale X-axis)',
                     fontsize=18, fontweight='bold')
         plt.tight_layout()
 
@@ -558,6 +881,91 @@ class StatisticalParetoAnalyzer:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"[OK] Saved {save_path}")
         plt.close()
+
+    def generate_statistical_tables(self, results):
+        """통계 테이블 생성 (Markdown & LaTeX)"""
+        base_total_params = 1_356_000
+
+        # In-domain 성능 테이블
+        base_performance = {}
+        for test_env in self.scenarios:
+            base_result = next((r for r in results
+                               if r['method'] == 'Base' and r['test_env'] == test_env), None)
+            if base_result:
+                base_performance[test_env] = base_result['nmse_mean']
+
+        # Markdown 테이블
+        md_path = Path(__file__).parent / 'papers' / 'IEEE_OJCOMS' / 'statistical_tables.md'
+        md_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(md_path, 'w', encoding='utf-8') as f:
+            f.write("# Statistical Analysis Tables\n\n")
+            f.write("## In-domain Performance Comparison (n=5)\n\n")
+            f.write("| Scenario | Method | Config | NMSE (dB) | vs Base (dB) | Params | Param % |\n")
+            f.write("|----------|--------|--------|-----------|--------------|--------|---------|\n")
+
+            for test_env in self.scenarios:
+                base_nmse = base_performance.get(test_env, 0)
+                f.write(f"| {test_env} | Base | - | {base_nmse:.2f} ± 0.00 | - | 0 | 0.00% |\n")
+
+                for method in ['Adapter', 'LoRA', 'Prompt', 'Hybrid']:
+                    in_domain = [r for r in results
+                                if r['method'] == method
+                                and r['train_env'] == test_env
+                                and r['test_env'] == test_env]
+
+                    if in_domain:
+                        best = min(in_domain, key=lambda x: x['nmse_mean'])
+                        improvement = best['nmse_mean'] - base_nmse
+                        param_ratio = (best['params'] / base_total_params) * 100
+
+                        f.write(f"| {test_env} | {method} | {best['config']} | "
+                               f"{best['nmse_mean']:.2f} ± {best['nmse_std']:.2f} | "
+                               f"{improvement:+.2f} | {best['params']:,} | {param_ratio:.2f}% |\n")
+
+        print(f"[OK] Saved {md_path}")
+
+        # LaTeX 테이블
+        tex_path = Path(__file__).parent / 'papers' / 'IEEE_OJCOMS' / 'statistical_tables.tex'
+
+        with open(tex_path, 'w', encoding='utf-8') as f:
+            f.write("% Statistical Tables for IEEE OJCOMS Paper\n\n")
+            f.write("\\begin{table}[htbp]\n")
+            f.write("\\centering\n")
+            f.write("\\caption{In-domain Performance Comparison (n=5)}\n")
+            f.write("\\label{tab:indomain_stats}\n")
+            f.write("\\begin{tabular}{llccccc}\n")
+            f.write("\\toprule\n")
+            f.write("Scenario & Method & Config & NMSE (dB) & vs Base (dB) & Params & Param \\% \\\\\n")
+            f.write("\\midrule\n")
+
+            for test_env in self.scenarios:
+                base_nmse = base_performance.get(test_env, 0)
+                f.write(f"{test_env} & Base & - & ${base_nmse:.2f} \\pm 0.00$ & - & 0 & 0.00\\% \\\\\n")
+
+                for method in ['Adapter', 'LoRA', 'Prompt', 'Hybrid']:
+                    in_domain = [r for r in results
+                                if r['method'] == method
+                                and r['train_env'] == test_env
+                                and r['test_env'] == test_env]
+
+                    if in_domain:
+                        best = min(in_domain, key=lambda x: x['nmse_mean'])
+                        improvement = best['nmse_mean'] - base_nmse
+                        param_ratio = (best['params'] / base_total_params) * 100
+
+                        f.write(f"{test_env} & {method} & {best['config']} & "
+                               f"${best['nmse_mean']:.2f} \\pm {best['nmse_std']:.2f}$ & "
+                               f"${improvement:+.2f}$ & {best['params']:,} & {param_ratio:.2f}\\% \\\\\n")
+
+                if test_env != self.scenarios[-1]:
+                    f.write("\\midrule\n")
+
+            f.write("\\bottomrule\n")
+            f.write("\\end{tabular}\n")
+            f.write("\\end{table}\n")
+
+        print(f"[OK] Saved {tex_path}")
 
 
 def main():
@@ -568,8 +976,21 @@ def main():
         print("\n" + "="*70)
         print("STATISTICAL ANALYSIS COMPLETE")
         print("="*70)
-        print(f"Total models evaluated: {len(set(r['model_name'] for r in results))}")
-        print(f"Total evaluations: {len(results) * analyzer.num_seeds}")
+        print(f"Total models: {len(set(r['model_name'] for r in results))}")
+        print(f"Total result entries: {len(results)}")
+        print("="*70)
+        print("\nGenerated files:")
+        print("  [CSV]")
+        print("    - pareto_statistical_results.csv")
+        print("  [Graphs]")
+        print("    - pareto_heatmap_statistical.png")
+        print("    - pareto_parameter_comparison_statistical.png")
+        print("    - pareto_domain_indomain_statistical.png")
+        print("    - pareto_domain_crossenv_statistical.png")
+        print("    - pareto_curves_statistical.png")
+        print("  [Tables]")
+        print("    - papers/IEEE_OJCOMS/statistical_tables.md")
+        print("    - papers/IEEE_OJCOMS/statistical_tables.tex")
         print("="*70)
 
 
