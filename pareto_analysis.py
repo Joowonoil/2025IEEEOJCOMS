@@ -50,13 +50,22 @@ class ParetoAnalyzer:
                 'len200': 25600
             },
             'Hybrid': {
+                # Base configurations
                 'p50_r5': 30230,
                 'p100_r10': 61952,
-                'p200_r20': 123904
+                'p200_r20': 123904,
+                # Extra configurations
+                'p25_r2': 12752,
+                'p75_r8': 48896,
+                'p100_r5': 36630,
+                'p50_r10': 55552,
+                'p150_r15': 92672,
+                'p300_r25': 161280
             }
         }
 
-        self.scenarios = ['InH', 'InF', 'UMi', 'UMa', 'RMa']
+        # 환경 순서: Indoor → Urban → Rural (복잡도 증가 순)
+        self.scenarios = ['InF', 'InH', 'UMi', 'UMa', 'RMa']
 
         # 시나리오별 거리 범위
         self.distance_ranges = {
@@ -414,8 +423,20 @@ class ParetoAnalyzer:
 
         for method in method_order:
             method_models = [m for m in model_info_list if m['method'] == method]
-            # 파라미터 수로 정렬 (적은 것부터)
-            method_models.sort(key=lambda x: x['params'])
+
+            # train_env를 모델 이름에서 추출
+            for model in method_models:
+                parts = model['model_name'].split('_')
+                if len(parts) >= 2:
+                    model['train_env'] = parts[1]  # InF, InH, UMi, UMa, RMa
+                else:
+                    model['train_env'] = 'ZZZ'  # 알 수 없는 경우 마지막으로
+
+            # 파라미터 수로 먼저 정렬, 같은 파라미터 내에서 train_env 순으로 정렬
+            method_models.sort(key=lambda x: (
+                x['params'],
+                self.scenarios.index(x['train_env']) if x['train_env'] in self.scenarios else 999
+            ))
 
             if method_models:
                 method_boundaries[method] = {
@@ -426,7 +447,7 @@ class ParetoAnalyzer:
                 current_idx += len(method_models)
 
         models = [m['model_name'] for m in sorted_models]
-        test_envs = self.scenarios
+        test_envs = self.scenarios  # 기본 환경 순서 사용
 
         # 개선도 데이터 생성 (PEFT NMSE - Base NMSE)
         improvement_data = []
@@ -1117,7 +1138,7 @@ def main():
             'Adapter': ['dim8', 'dim16', 'dim32', 'dim64'],
             'LoRA': ['r4', 'r8', 'r16', 'r20'],
             'Prompt': ['len50', 'len100', 'len200'],
-            'Hybrid': ['p50_r5', 'p100_r10', 'p200_r20']
+            'Hybrid': ['p50_r5', 'p100_r10', 'p200_r20', 'p25_r2', 'p75_r8', 'p100_r5', 'p50_r10', 'p150_r15', 'p300_r25']
         }
         analyzer.analyze_iterations(sample_configs=all_configs, save_suffix='all')
 
