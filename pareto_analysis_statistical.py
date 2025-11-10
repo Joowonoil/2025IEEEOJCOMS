@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 from scipy import stats
+from matplotlib.colors import LinearSegmentedColormap
 
 class StatisticalParetoAnalyzer:
     def __init__(self, device='cuda:0', num_seeds=5):
@@ -437,6 +438,9 @@ class StatisticalParetoAnalyzer:
         print("\n[BONUS] Generating statistical tables...")
         self.generate_statistical_tables(results)
 
+        print("\n[EXTRA] Generating paper-ready heatmaps...")
+        self.plot_paper_heatmaps(results)
+
     def plot_heatmap(self, results):
         """Heatmap: Cross-environment performance"""
         # Base 성능
@@ -526,7 +530,7 @@ class StatisticalParetoAnalyzer:
         improvement_df = pd.DataFrame(improvement_data, index=display_labels, columns=test_envs)
         actual_nmse_df = pd.DataFrame(actual_nmse_data, index=display_labels, columns=test_envs)
 
-        # Annotation: "improvement\n(actual_nmse)"
+        # Annotation: "improvement | actual_nmse"
         annot_labels = []
         for i in range(len(display_labels)):
             row_labels = []
@@ -534,7 +538,7 @@ class StatisticalParetoAnalyzer:
                 improvement = improvement_df.iloc[i, j]
                 actual_nmse = actual_nmse_df.iloc[i, j]
                 if not np.isnan(improvement) and not np.isnan(actual_nmse):
-                    row_labels.append(f"{improvement:+.2f}\n({actual_nmse:.2f})")
+                    row_labels.append(f"{improvement:+.2f} | {actual_nmse:.2f}")
                 else:
                     row_labels.append("")
             annot_labels.append(row_labels)
@@ -543,21 +547,44 @@ class StatisticalParetoAnalyzer:
         # Heatmap
         fig, ax = plt.subplots(figsize=(14, max(20, len(display_labels) * 0.35)))
 
+        # 커스텀 컬러맵: 진한 초록 → 초록 → 연두 → 흰색 → 주황
+        # 위치 조정: 연두가 -0.5에서 나타남
+        colors = [
+            '#1B5E20',  # 진한 초록 (-3, 매우 좋음)
+            '#4CAF50',  # 밝은 초록 (-2, 좋음)
+            '#AED581',  # 연두 (-0.5, 약간 좋음)
+            '#FFFFFF',  # 흰색 (0, 중립)
+            '#FF9800'   # 주황 (+3, 나쁨)
+        ]
+        n_bins = 100
+        # positions: -3=0.0, -2=0.167, -0.5=0.417, 0=0.5, +3=1.0
+        positions = [0.0, 0.167, 0.417, 0.5, 1.0]
+        cmap_custom = LinearSegmentedColormap.from_list('green_white_orange',
+                                                        list(zip(positions, colors)), N=n_bins)
+
+        # 폰트 설정
+        plt.rcParams['font.family'] = 'sans-serif'
+
         sns.heatmap(improvement_df,
                    annot=annot_labels,
                    fmt='',
-                   cmap='RdYlGn_r',
+                   cmap=cmap_custom,
                    center=0,
-                   vmin=-2,
-                   vmax=2,
-                   linewidths=0.5,
-                   linecolor='gray',
-                   cbar_kws={'label': 'Improvement vs Base (dB)', 'shrink': 0.8},
+                   vmin=-3,
+                   vmax=3,
+                   linewidths=2,
+                   linecolor='white',
+                   cbar_kws={'label': 'Improvement vs Base (dB)', 'shrink': 0.8, 'fraction': 0.025, 'pad': 0.02},
                    ax=ax,
-                   annot_kws={'fontsize': 6.5})
+                   annot_kws={'fontsize': 12})
+
+        # Add Enhanced/Degraded labels to colorbar (vertical)
+        cbar = ax.collections[0].colorbar
+        cbar.ax.text(2.5, -3, 'Enhanced', ha='left', va='center', fontsize=9, fontweight='bold', rotation=90)
+        cbar.ax.text(2.5, 3, 'Degraded', ha='left', va='center', fontsize=9, fontweight='bold', rotation=90)
 
         ax.set_title('PEFT Performance Improvement vs Base Model\n'
-                    '(Top: Improvement | Bottom: Actual NMSE in dB)\n'
+                    '(Left: Improvement | Right: Actual NMSE in dB)\n'
                     'Grouped by Method and Sorted by Parameter Count',
                     fontsize=16, fontweight='bold', pad=20)
         ax.set_xlabel('Test Environment', fontsize=13, fontweight='bold')
@@ -702,14 +729,15 @@ class StatisticalParetoAnalyzer:
             bars = ax.bar(x, improvements, color=colors, alpha=0.85,
                          edgecolor='black', linewidth=1.5)
 
-            # 파라미터 비율 표시
+            # 파라미터 비율 표시 (항상 위쪽)
             for i, (bar, ratio) in enumerate(zip(bars, param_ratios)):
                 if ratio > 0:
                     height = bar.get_height()
-                    y_offset = 0.15 if height >= 0 else -0.25
-                    ax.text(bar.get_x() + bar.get_width()/2., height + y_offset,
+                    # 음수든 양수든 항상 0보다 위쪽에 표시
+                    y_pos = max(height, 0) + 0.15
+                    ax.text(bar.get_x() + bar.get_width()/2., y_pos,
                            f'{ratio:.2f}%',
-                           ha='center', va='bottom' if height >= 0 else 'top',
+                           ha='center', va='bottom',
                            fontsize=9, fontweight='bold', color='black')
 
             ax.axhline(y=0, color='black', linestyle='--', linewidth=2, alpha=0.8)
@@ -966,6 +994,156 @@ class StatisticalParetoAnalyzer:
             f.write("\\end{table}\n")
 
         print(f"[OK] Saved {tex_path}")
+
+    def plot_paper_heatmaps(self, results):
+        """논문용 heatmap: Method-config 단위로 분할"""
+        plots_dir = Path(__file__).parent / 'plots'
+        plots_dir.mkdir(exist_ok=True)
+
+        print("Generating method-config split heatmaps...")
+        self.plot_heatmap_methodconfig_split(results, plots_dir)
+
+    def get_custom_colormap(self):
+        """공통 컬러맵 생성"""
+        colors = [
+            '#1B5E20',  # 진한 초록 (-3, 매우 좋음)
+            '#4CAF50',  # 밝은 초록 (-2, 좋음)
+            '#AED581',  # 연두 (-0.5, 약간 좋음)
+            '#FFFFFF',  # 흰색 (0, 중립)
+            '#FF9800'   # 주황 (+3, 나쁨)
+        ]
+        positions = [0.0, 0.167, 0.417, 0.5, 1.0]
+        return LinearSegmentedColormap.from_list('green_white_orange',
+                                                list(zip(positions, colors)), N=100)
+
+    def plot_heatmap_methodconfig_split(self, results, plots_dir):
+        """옵션 4: Method-Config 단위로 5줄씩 분할 (전체 heatmap과 동일한 순서)"""
+        base_performance = {}
+        for test_env in self.scenarios:
+            base_nmse = next((r['nmse_mean'] for r in results
+                             if r['method'] == 'Base' and r['test_env'] == test_env), None)
+            base_performance[test_env] = base_nmse
+
+        peft_results = [r for r in results if r['method'] != 'Base']
+
+        # 전체 heatmap과 동일한 정렬
+        model_info_list = []
+        for r in peft_results:
+            model_name = r['model_name']
+            if not any(m['model_name'] == model_name for m in model_info_list):
+                model_info_list.append({
+                    'model_name': model_name,
+                    'method': r['method'],
+                    'params': r['params'],
+                    'config': r['config']
+                })
+
+        # 정렬: 방법별 → 파라미터 → train_env
+        method_order = ['Adapter', 'LoRA', 'Prompt', 'Hybrid']
+        sorted_models = []
+
+        for method in method_order:
+            method_models = [m for m in model_info_list if m['method'] == method]
+
+            # train_env 추출
+            for model in method_models:
+                parts = model['model_name'].split('_')
+                model['train_env'] = parts[1] if len(parts) >= 2 else 'ZZZ'
+
+            # 정렬: params → train_env
+            method_models.sort(key=lambda x: (
+                x['params'],
+                self.scenarios.index(x['train_env']) if x['train_env'] in self.scenarios else 999
+            ))
+
+            sorted_models.extend(method_models)
+
+        # 5개씩 묶어서 저장
+        for i in range(0, len(sorted_models), 5):
+            chunk = sorted_models[i:i+5]
+
+            # 첫 번째 모델로 파일명 결정
+            first_model = chunk[0]
+            method = first_model['method']
+            config = first_model['config']
+
+            # 데이터 생성
+            improvement_data = []
+            annot_labels = []
+            display_labels = []
+
+            for model_info in chunk:
+                model = model_info['model_name']
+                train_env = model_info['train_env']
+
+                # 환경만 표시 (method-config는 제목에 있음)
+                display_label = train_env
+                display_labels.append(display_label)
+
+                improvement_row = []
+                row_labels = []
+
+                for test_env in self.scenarios:
+                    peft_nmse = next((r['nmse_mean'] for r in peft_results
+                                     if r['model_name'] == model and r['test_env'] == test_env), None)
+                    base_nmse = base_performance.get(test_env)
+
+                    if peft_nmse is not None and base_nmse is not None:
+                        improvement = peft_nmse - base_nmse
+                        improvement_row.append(improvement)
+                        row_labels.append(f"{improvement:+.2f} | {peft_nmse:.2f}")
+                    else:
+                        improvement_row.append(np.nan)
+                        row_labels.append("")
+
+                improvement_data.append(improvement_row)
+                annot_labels.append(row_labels)
+
+            # DataFrame
+            improvement_df = pd.DataFrame(improvement_data, index=display_labels, columns=self.scenarios)
+            annot_labels = np.array(annot_labels)
+
+            # Heatmap
+            fig, ax = plt.subplots(figsize=(10, max(4, len(display_labels) * 0.6)))
+
+            # 폰트 설정
+            plt.rcParams['font.family'] = 'sans-serif'
+
+            sns.heatmap(improvement_df,
+                       annot=annot_labels,
+                       fmt='',
+                       cmap=self.get_custom_colormap(),
+                       center=0,
+                       vmin=-3,
+                       vmax=3,
+                       linewidths=2,
+                       linecolor='white',
+                       cbar_kws={
+                           'label': 'Improvement vs Base (dB)',
+                           'orientation': 'horizontal',
+                           'shrink': 0.8,
+                           'pad': 0.2
+                       },
+                       ax=ax,
+                       annot_kws={'fontsize': 14})
+
+            # Add Enhanced/Degraded labels to colorbar (horizontal)
+            cbar = ax.collections[0].colorbar
+            cbar.ax.text(-3, -0.8, 'Enhanced', ha='center', va='top', fontsize=9, fontweight='bold')
+            cbar.ax.text(3, -0.8, 'Degraded', ha='center', va='top', fontsize=9, fontweight='bold')
+
+            ax.set_title(f'{method} ({config}): Performance Improvement vs Base\n'
+                        f'(Left: Improvement | Right: Actual NMSE in dB)',
+                        fontsize=13, fontweight='bold', pad=15)
+            ax.set_xlabel('Test Environment', fontsize=11, fontweight='bold')
+            ax.set_ylabel('Transfer Target\n(Model)', fontsize=11, fontweight='bold')
+            ax.set_yticklabels(ax.get_yticklabels(), rotation=0, ha='right', fontsize=9)
+
+            plt.tight_layout()
+            save_path = plots_dir / f'heatmap_{method}_{config}.png'
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            print(f"  [OK] Saved {save_path}")
+            plt.close()
 
 
 def main():
